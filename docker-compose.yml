@@ -1,0 +1,24 @@
+version: "3"
+services:
+  epi-pacbio:
+    image: "cfrasier/epi-pacbio:latest"
+    container_name: "epi-pacbio"
+  fiberseq:
+    image: "cfrasier/epi-fiberseq:latest"
+    container_name: "epi-fiberseq"
+  fire:
+    build:
+      context: fire
+      dockerfile: fire.Dockerfile
+    image: "cfrasier/epi-fire:latest"
+    container_name: "fire"
+  pbsv:
+    image: "quay.io/pacbio/pbsv:2.11.0_build1"
+    container_name: "pbsv"
+  pbmm2:
+    image: "quay.io/pacbio/pbmm2:1.17.0_build1"
+    container_name: "pbmm2"
+  deepvariant:
+    image: "google/deepvariant:1.8.0"
+    container_name: "deepvariant"
+  
