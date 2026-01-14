@@ -5,6 +5,7 @@ nextflow.enable.dsl = 2
 params.input_bam_path = ''
 params.input_string_filter = ''
 params.sample_sheet = ''
+params.ref_path = '/media/genomics/18Tb_1/references'
 
 // default parameters
 params.ref_name = 'T2T'
@@ -44,14 +45,14 @@ process align_bams {
     container 'cfrasier/epi-pacbio:latest'
 
     input:
-    tuple val(samp_name), path(input_bam), val(ref_name), path(ref_mmi)
+    tuple val(samp_name), path(input_bam), val(ref_name), path(ref_fasta)
 
     output:
     tuple val(samp_name), path("*aligned.sorted.bam"), val(ref_name), emit: aligned_bam
 
     script:
     """
-    pbmm2 align ${ref_mmi} ${input_bam} ${samp_name}.aligned.sorted.bam -j 14 --preset HIFI --sort -J 2 --log-level INFO
+    pbmm2 align ${ref_fasta} ${input_bam} ${samp_name}.aligned.sorted.bam -j 14 --preset HIFI --sort -J 2 --log-level INFO
     """
 }
 
@@ -243,15 +244,16 @@ process pileupbedgraphtobigwig_6ma {
     container 'cfrasier/epi-fiberseq:latest'
 
     input:
-    tuple val(samp_name), path(pileup), val(ref_name), path(genome_chromsizes)
+    tuple val(samp_name), path(pileup), val(ref_name), path(ref_fai)
 
     output:
     tuple val(samp_name), path("*.bw")
 
     script:
     """
+    cut -f 1,2 ${ref_fai} > chromsizes
     cut -f 1,2,3,4 ${pileup} > temp.bedgraph
-    bedGraphToBigWig temp.bedgraph ${genome_chromsizes} ${samp_name}.perc6ma.bw
+    bedGraphToBigWig temp.bedgraph chromsizes ${samp_name}.perc6ma.bw
     """
 }
 
@@ -262,15 +264,16 @@ process pileupbedgraphtobigwig_5mC {
     container 'cfrasier/epi-fiberseq:latest'
 
     input:
-    tuple val(samp_name), path(pileup), val(ref_name), path(genome_chromsizes)
+    tuple val(samp_name), path(pileup), val(ref_name), path(ref_fai)
 
     output:
     tuple val(samp_name), path("*.bw")
 
     script:
     """
+    cut -f 1,2 ${ref_fai} > chromsizes
     cut -f 1-3,5 ${pileup} > temp.bedgraph
-    bedGraphToBigWig temp.bedgraph ${genome_chromsizes} ${samp_name}.perc5mc.bw
+    bedGraphToBigWig temp.bedgraph chromsizes ${samp_name}.perc5mc.bw
     """
 }
 
@@ -281,60 +284,45 @@ process pileupbedgraphtobigwig_nuc {
     container 'cfrasier/epi-fiberseq:latest'
 
     input:
-    tuple val(samp_name), path(pileup), val(ref_name), path(genome_chromsizes)
+    tuple val(samp_name), path(pileup), val(ref_name), path(ref_fai)
 
     output:
     tuple val(samp_name), path("*.bw")
 
     script:
     """
+    cut -f 1,2 ${ref_fai} > chromsizes
     cut -f 1-3,6 ${pileup} > temp.bedgraph
-    bedGraphToBigWig temp.bedgraph ${genome_chromsizes} ${samp_name}.percnuc.bw
+    bedGraphToBigWig temp.bedgraph chromsizes ${samp_name}.percnuc.bw
     """
 }
 
 /////////////////////////////////////////////////////////////
 
 workflow {
-    // Set the index files based on the reference genome provided
-    // ->refname, ref_mmi, genome_chromsizes, ref_fasta, ref_fai
-    T2T_ref_ch = channel.of(
-        [
-            "T2T",
-            "/media/genomics/18Tb_1/references/T2T/T2T.ch13v2.0.mmi",
-            "/media/genomics/18Tb_1/references/T2T/hs1.chrom.sizes",
-            "/media/genomics/18Tb_1/references/T2T/chm13v2.0.clean.fasta",
-            "/media/genomics/18Tb_1/references/T2T/chm13v2.0.clean.fasta.fai",
-        ]
-    )
-    hg38_ref_ch = channel.of(
-        [
-            "hg38",
-            "/media/genomics/18Tb_1/references/hg38/GCF_000001405.40_GRCh38.p14_genomic.NO_ALTS.mmi",
-            "/media/genomics/18Tb_1/references/hg38/hg38.uscsnames.v40.NO_ALTS.chrom.sizes",
-            "/media/genomics/18Tb_1/references/hg38/GCF_000001405.40_GRCh38.p14_genomic.NO_ALTS.fa",
-            "/media/genomics/18Tb_1/references/hg38/GCF_000001405.40_GRCh38.p14_genomic.NO_ALTS.fa.fai",
-        ]
-    )
-    mm39_ref_ch = channel.of(
-        [
-            "mm39",
-            "/media/genomics/18Tb_1/references/mm10/GCF_000001635.27_GRCm39_genomic.mmi",
-            "/media/genomics/18Tb_1/references/mm10/GCF_000001635.27_GRCm39_genomic.chrom.sizes",
-            "/media/genomics/18Tb_1/references/mm10/GCF_000001635.27_GRCm39_genomic.fa",
-            "/media/genomics/18Tb_1/references/mm10/GCF_000001635.27_GRCm39_genomic.fa.fai",
-        ]
-    )
 
-    T2T_ref_ch
-        .concat(hg38_ref_ch)
-        .concat(mm39_ref_ch)
-        .map { row ->
-            tuple(row[1], row[2], row[0], row[3], row[4])
-        }
-        .set { references_ch }
-    // references_ch.view()
-    // -> ref_mmi, genome_chromsizes, ref_name, ref_fasta, ref_fai
+    references_ch = channel.of(
+        [
+            "${params.ref_path}/T2T/chm13v2.0.clean.fasta",
+            "${params.ref_path}/T2T/chm13v2.0.clean.fasta.fai",
+            "T2T",
+        ]
+    )
+    .concat(channel.of(
+        [
+            "${params.ref_path}/hg38/GCF_000001405.40_GRCh38.p14_genomic.NO_ALTS.fa",
+            "${params.ref_path}/hg38/GCF_000001405.40_GRCh38.p14_genomic.NO_ALTS.fa.fai",
+            "hg38",
+        ]
+    ))
+    .concat(channel.of(
+        [
+            "${params.ref_path}/mm10/GCF_000001635.27_GRCm39_genomic.fa",
+            "${params.ref_path}/mm10/GCF_000001635.27_GRCm39_genomic.fa.fai",
+            "mm39",
+        ]
+    ))
+    // -> ref_fasta, ref_fai, ref_name
 
     called_input_ch = channel.fromPath("${params.input_bam_path}/*${params.input_string_filter}*.bam")
     // grabs all bams in the input path
@@ -388,7 +376,7 @@ workflow {
         .combine(references_ch, by: 2)
         .map { row -> tuple(row[1], row[2], row[0], row[3]) }
         .set { aligned_bams_input_ch }
-    // -> samp_name, bam_path, ref_name, ref_mmi
+    // -> samp_name, bam_path, ref_name, ref_fasta
 
     align_bams(aligned_bams_input_ch)
     // -> samp_name, aligned_bam, ref_name
@@ -406,7 +394,7 @@ workflow {
         // If --phase_reads is set in command line, run hiphase to generate haplotype phased bams
         index_bams.out.bam_windex
             .combine(references_ch, by: 2)
-            .map { row -> tuple(row[1], row[2], row[0], row[3], row[6], row[7]) }
+            .map { row -> tuple(row[1], row[2], row[0], row[3], row[4], row[5]) }
             .set { variantcalling_bams_input_ch }
         // -> samp_name, aligned_bam, ref_name, bam_index, ref_fasta, ref_fai
 
@@ -428,7 +416,7 @@ workflow {
 
         hiphase_input
             .combine(references_ch, by: 2)
-            .map { row -> tuple(row[1], row[2], row[0], row[3], row[4], row[6], row[7], row[9], row[12], row[13]) }
+            .map { row -> tuple(row[1], row[2], row[0], row[3], row[4], row[6], row[7], row[9], row[10], row[11]) }
             .set { hiphase_input_withref }
         // -> samp_name, aligned_bam, ref_name, bam_index, small_variant_vcf, small_variant_vcf_index, structural_variant_vcf, structural_variant_vcf_index, ref_fasta, ref_fai
         
@@ -459,7 +447,7 @@ workflow {
             .combine(references_ch, by: 2)
             .map { row -> tuple(row[1], row[2], row[0], row[4]) }
             .set { pileup_withref_ch }
-        // -> samp_name, pileups, ref_name, genome_chromsizes
+        // -> samp_name, pileups, ref_name, ref_fai
         //pileup_withref_ch.view()
         // convert the pileup bedgraph into a bigwig for downstream purposes
         pileupbedgraphtobigwig_6ma(pileup_withref_ch)
