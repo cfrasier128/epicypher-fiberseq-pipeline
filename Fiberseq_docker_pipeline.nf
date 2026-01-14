@@ -16,7 +16,7 @@ params.phase_reads = false
 params.create_bigwigs = false
 
 // output directory
-params.outdir = ''
+params.outdir = "${workflow.launchDir}/fiberseq_output"
 
 process merge_bams {
     publishDir "${params.outdir}/0_Unaligned-bam/1_Merged-bams", mode: 'copy'
