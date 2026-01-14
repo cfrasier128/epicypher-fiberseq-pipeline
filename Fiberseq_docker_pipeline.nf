@@ -104,7 +104,7 @@ process deepvariant {
     """
 }
 
-process call_structural_variants {
+process pbsv {
     publishDir "${params.outdir}/2_Aligned-bam/2_Variant-calling/", mode: 'copy'
     cpus 8
     memory '16 GB'
@@ -114,14 +114,46 @@ process call_structural_variants {
     tuple val(samp_name), path(aligned_bam), val(ref_name), path(bam_index), path(ref_fasta), path(ref_fai)
 
     output:
-    tuple val(samp_name), path("*.sv.vcf.gz"), val(ref_name), path("*.tbi"), emit: structural_variants
+    tuple val(samp_name), path("*.structural_variants.vcf.gz"), val(ref_name), path("*.tbi"), emit: structural_variants
 
     script:
     """
-    pbsv discover --hifi ${aligned_bam} ${samp_name}.svsig.gz --sample ${samp_name} ;
-    pbsv call -j ${task.cpus} --hifi ${ref_fasta} ${samp_name}.svsig.gz ${samp_name}.sv.vcf;
-    bgzip ${samp_name}.sv.vcf;
-    tabix -p vcf ${samp_name}.sv.vcf.gz;
+    pbsv discover --hifi ${aligned_bam} ${samp_name}.svsig.gz --sample ${samp_name}
+    pbsv call -j ${task.cpus} --hifi ${ref_fasta} ${samp_name}.svsig.gz ${samp_name}.${ref_name}.structural_variants.vcf
+    bgzip ${samp_name}.${ref_name}.structural_variants.vcf
+    tabix -p vcf ${samp_name}.${ref_name}.structural_variants.vcf.gz
+    """
+}
+
+process sawfish {
+    // we need to check the performance of this task for samples with <10x coverage
+    publishDir "${params.outdir}/2_Aligned-bam/2_Variant-calling/", mode: 'copy'
+    cpus 8
+    memory '64 GB'
+    container 'quay.io/pacbio/sawfish:2.2.1_build1'
+
+    input:
+    tuple val(samp_name), path(aligned_bam), val(ref_name), path(bam_index), path(ref_fasta), path(ref_fai)
+
+    output:
+    tuple val(samp_name), path("*.structural_variants.vcf.gz"), val(ref_name), path("*.tbi"), emit: structural_variants
+
+    script:
+    """
+    sawfish discover \
+        --threads ${task.cpus} \
+        --disable-cnv \
+        --ref ${ref_fasta} \
+        --bam ${aligned_bam} \
+        --output-dir ${samp_name}_discover
+
+    sawfish joint-call \
+        --threads ${task.cpus} \
+        --sample ${samp_name}_discover \
+        --output-dir ${samp_name}_call
+    
+    mv -v ${samp_name}_call/genotyped.sv.vcf.gz ${samp_name}.${ref_name}.structural_variants.vcf.gz
+    mv -v ${samp_name}_call/genotyped.sv.vcf.gz.tbi ${samp_name}.${ref_name}.structural_variants.vcf.gz.tbi
     """
 }
 
@@ -331,14 +363,14 @@ workflow {
         // -> samp_name, small_variant_vcf, ref_name, small_variant_vcf_index
 
         // call structural variants using pbsv
-        call_structural_variants(variantcalling_bams_input_ch)
+        sawfish(variantcalling_bams_input_ch)
         // -> samp_name, structural_variant_vcf, ref_name, structural_variant_vcf_index
 
         align_bams.out.aligned_bam.combine(deepvariant.out.vcfs, by: 0).set { bams_snps }
         // combine the bams and vcf channels
         // -> samp_name, aligned_bam, ref_name, bam_index, small_variant_vcf, small_variant_vcf_index
 
-        bams_snps.combine(call_structural_variants.out.structural_variants, by: 0).set { hiphase_input }
+        bams_snps.combine(sawfish.out.structural_variants, by: 0).set { hiphase_input }
         // combine the bams and sv channels
         // -> samp_name, aligned_bam, ref_name, bam_index, small_variant_vcf, small_variant_vcf_index, structural_variant_vcf, structural_variant_vcf_index
 
@@ -377,7 +409,8 @@ workflow {
             .set { pileup_withref_ch }
         // -> samp_name, pileups, ref_name, ref_fai
         // convert the pileup bedgraph into a bigwig for downstream purposes
-        pileup_withref_ch.map { row -> tuple(row[0], row[1], row[2], row[3], "perc6ma", 4) }
+        pileup_withref_ch
+            .map { row -> tuple(row[0], row[1], row[2], row[3], "perc6ma", 4) }
             .concat(pileup_withref_ch.map { row -> tuple(row[0], row[1], row[2], row[3], "perccpg", 5) })
             .concat(pileup_withref_ch.map { row -> tuple(row[0], row[1], row[2], row[3], "percnuc", 6) })
             .set { pileup_bedgraph_ch }
