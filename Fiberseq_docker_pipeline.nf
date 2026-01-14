@@ -222,14 +222,14 @@ process create_pileups {
     """
 }
 
-process pileupbedgraphtobigwig_6ma {
+process pileupbedgraphtobigwig {
     publishDir "${params.outdir}/4_Pileups_Bigwigs/2_BigWigs/", mode: 'copy'
     cpus 1
     memory '4 GB'
     container 'cfrasier/epi-fiberseq:latest'
 
     input:
-    tuple val(samp_name), path(pileup), val(ref_name), path(ref_fai)
+    tuple val(samp_name), path(pileup), val(ref_name), path(ref_fai), val(feature), val(col_num)
 
     output:
     tuple val(samp_name), path("*.bw")
@@ -237,48 +237,8 @@ process pileupbedgraphtobigwig_6ma {
     script:
     """
     cut -f 1,2 ${ref_fai} > chromsizes
-    cut -f 1,2,3,4 ${pileup} > temp.bedgraph
-    bedGraphToBigWig temp.bedgraph chromsizes ${samp_name}.perc6ma.bw
-    """
-}
-
-process pileupbedgraphtobigwig_5mC {
-    publishDir "${params.outdir}/4_Pileups_Bigwigs/2_BigWigs/", mode: 'copy'
-    cpus 1
-    memory '4 GB'
-    container 'cfrasier/epi-fiberseq:latest'
-
-    input:
-    tuple val(samp_name), path(pileup), val(ref_name), path(ref_fai)
-
-    output:
-    tuple val(samp_name), path("*.bw")
-
-    script:
-    """
-    cut -f 1,2 ${ref_fai} > chromsizes
-    cut -f 1-3,5 ${pileup} > temp.bedgraph
-    bedGraphToBigWig temp.bedgraph chromsizes ${samp_name}.perc5mc.bw
-    """
-}
-
-process pileupbedgraphtobigwig_nuc {
-    publishDir "${params.outdir}/4_Pileups_Bigwigs/2_BigWigs/", mode: 'copy'
-    cpus 1
-    memory '4 GB'
-    container 'cfrasier/epi-fiberseq:latest'
-
-    input:
-    tuple val(samp_name), path(pileup), val(ref_name), path(ref_fai)
-
-    output:
-    tuple val(samp_name), path("*.bw")
-
-    script:
-    """
-    cut -f 1,2 ${ref_fai} > chromsizes
-    cut -f 1-3,6 ${pileup} > temp.bedgraph
-    bedGraphToBigWig temp.bedgraph chromsizes ${samp_name}.percnuc.bw
+    cut -f 1,2,3,${col_num} ${pileup} > temp.bedgraph
+    bedGraphToBigWig temp.bedgraph chromsizes ${samp_name}.${feature}.bw
     """
 }
 
@@ -396,13 +356,13 @@ workflow {
         call_msps_input_ch = align_bams.out.aligned_bam
     }
 
-    call_msps(call_msps_input_ch)
     // add nucleosomes and MSPs to the bams
+    call_msps(call_msps_input_ch)
     // -> samp_name, msp_bam, ref_name
     // -> msp_bam_index
 
-    fiberseq_qc(call_msps.out.msp_bams)
     // run stergachis fiberseq qc on bams that have been run through add-nucleosomes
+    fiberseq_qc(call_msps.out.msp_bams)
     // -> samp_name, qc_files, ref_name
 
 
@@ -416,10 +376,11 @@ workflow {
             .map { row -> tuple(row[1], row[2], row[0], row[4]) }
             .set { pileup_withref_ch }
         // -> samp_name, pileups, ref_name, ref_fai
-        //pileup_withref_ch.view()
         // convert the pileup bedgraph into a bigwig for downstream purposes
-        pileupbedgraphtobigwig_6ma(pileup_withref_ch)
-        pileupbedgraphtobigwig_5mC(pileup_withref_ch)
-        pileupbedgraphtobigwig_nuc(pileup_withref_ch)
+        pileup_withref_ch.map { row -> tuple(row[0], row[1], row[2], row[3], "perc6ma", 4) }
+            .concat(pileup_withref_ch.map { row -> tuple(row[0], row[1], row[2], row[3], "perccpg", 5) })
+            .concat(pileup_withref_ch.map { row -> tuple(row[0], row[1], row[2], row[3], "percnuc", 6) })
+            .set { pileup_bedgraph_ch }
+        pileupbedgraphtobigwig(pileup_bedgraph_ch)
     }
 }
