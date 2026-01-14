@@ -1,0 +1,11 @@
+bin
+
+inputs
+references
+
+singularity_cache
+
+work
+
+.nextflow
+.nextflow*
