@@ -3,10 +3,10 @@ nextflow.enable.dsl = 2
 
 // inputs
 params.sample_sheet = ''
-params.ref_path = ''
+params.ref_path = "${workflow.launchDir}/references"
 
 // default parameters
-params.ref_name = 'T2T'
+params.ref_name = 'hg38'
 params.confidence_ml_val = '250'
 params.minimum_msp_dist = '10'
 
@@ -278,16 +278,16 @@ workflow {
 
     references_ch = channel.of(
             [
-                "${params.ref_path}/T2T/chm13v2.0.clean.fasta",
-                "${params.ref_path}/T2T/chm13v2.0.clean.fasta.fai",
-                "T2T",
+                "${params.ref_path}/chm13/chm13.fasta",
+                "${params.ref_path}/chm13/chm13.fasta.fai",
+                "chm13",
             ]
         )
         .concat(
             channel.of(
                 [
-                    "${params.ref_path}/hg38/GCF_000001405.40_GRCh38.p14_genomic.NO_ALTS.fa",
-                    "${params.ref_path}/hg38/GCF_000001405.40_GRCh38.p14_genomic.NO_ALTS.fa.fai",
+                    "${params.ref_path}/hg38/hg38.fasta",
+                    "${params.ref_path}/hg38/hg38.fasta.fai",
                     "hg38",
                 ]
             )
@@ -295,8 +295,8 @@ workflow {
         .concat(
             channel.of(
                 [
-                    "${params.ref_path}/mm10/GCF_000001635.27_GRCm39_genomic.fa",
-                    "${params.ref_path}/mm10/GCF_000001635.27_GRCm39_genomic.fa.fai",
+                    "${params.ref_path}/mm39/mm39.fasta",
+                    "${params.ref_path}/mm39/mm39.fasta.fai",
                     "mm39",
                 ]
             )
