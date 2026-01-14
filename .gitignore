@@ -7,6 +7,7 @@ singularity_cache
 
 work
 fiberseq_output
+*.html
 
 .nextflow
 .nextflow*
