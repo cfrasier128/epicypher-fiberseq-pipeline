@@ -129,27 +129,28 @@ process hiphase {
     publishDir "${params.outdir}/2_Aligned-bam/3_Haplotype-phased/", mode: 'copy'
     cpus 8
     memory '16 GB'
-    container 'cfrasier/epi-fiberseq:latest'
+    container 'quay.io/pacbio/hiphase:1.5.0_build1'
 
     input:
-    tuple val(samp_name), path(aligned_bam), val(ref_name), path(bam_index), path(vcf), path(vcf_index), path(struct_vars), path(struct_tbi), path(ref_fasta), path(ref_fai)
+    tuple val(samp_name), path(aligned_bam), val(ref_name), path(bam_index), path(small_variant_vcf), path(small_variant_vcf_index), path(structural_variant_vcf), path(structural_variant_vcf_index), path(ref_fasta), path(ref_fai)
 
     output:
     tuple val(samp_name), path("*.haplotagged.bam"), val(ref_name), path("*.haplotagged.bam.bai"), emit: hap_phased_bams
-    path "*"
+    tuple path("*.phased.vcf.gz*"), path("*.summary.tsv")
 
     script:
     """
-    conda run -n fiberseq-qc hiphase --reference ${ref_fasta} \
-        --threads ${task.cpus} --disable-global-realignment \
+    hiphase \
+        --sample-name ${samp_name} \
+        --threads ${task.cpus} \
+        --reference ${ref_fasta} \
         --bam ${aligned_bam} \
-        --output-bam ${samp_name}.haplotagged.bam \
-        --vcf ${vcf} \
-        --output-vcf ${samp_name}.haplotagged.vcf \
-        --vcf ${struct_vars} \
-        --output-vcf ${samp_name}.haplotagged.structural.vcf \
-        --ignore-read-groups \
-        --summary-file ${samp_name}.summary.tsv
+        --output-bam ${samp_name}.${ref_name}.haplotagged.bam \
+        --vcf ${small_variant_vcf} \
+        --output-vcf ${samp_name}.${ref_name}.small_variants.phased.vcf.gz \
+        --vcf ${structural_variant_vcf} \
+        --output-vcf ${samp_name}.${ref_name}.structural_variants.phased.vcf.gz \
+        --summary-file ${samp_name}.hiphase.summary.tsv
     """
 }
 
