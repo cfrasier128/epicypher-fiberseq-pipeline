@@ -81,10 +81,11 @@ process pacbio_qc {
     """
 }
 
-process call_variants {
+process deepvariant {
     publishDir "${params.outdir}/2_Aligned-bam/2_Variant-calling/", mode: 'copy'
-    cpus 8
-    memory '16 GB'
+    cpus 16
+    memory '64 GB'
+    container 'google/deepvariant:1.9.0'
 
     input:
     tuple val(samp_name), path(aligned_bam), val(ref_name), path(bam_index), path(ref_fasta), path(ref_fai)
@@ -94,16 +95,12 @@ process call_variants {
 
     script:
     """
-    docker run -v \$PWD:\$PWD \
-    -v /media/:/media/ \
-    -w \$PWD \
-    google/deepvariant:1.8.0  \
-    /opt/deepvariant/bin/run_deepvariant --model_type=PACBIO \
-        --ref=${ref_fasta} \
+    /opt/deepvariant/bin/run_deepvariant \
+        --model_type PACBIO \
+        --ref ${ref_fasta} \
         --reads ${aligned_bam} \
-        --output_vcf=${samp_name}.vcf.gz \
-        --sample_name ${samp_name} \
-        --num_shards=${task.cpus}
+        --output_vcf ${samp_name}.${ref_name}.deepvariant.vcf.gz \
+        --num_shards ${task.cpus}
     """
 }
 
@@ -369,14 +366,14 @@ workflow {
         // -> samp_name, aligned_bam, ref_name, bam_index, ref_fasta, ref_fai
 
         // call snps and indels using deepvariant
-        call_variants(variantcalling_bams_input_ch)
+        deepvariant(variantcalling_bams_input_ch)
         // -> samp_name, small_variant_vcf, ref_name, small_variant_vcf_index
 
         // call structural variants using pbsv
         call_structural_variants(variantcalling_bams_input_ch)
         // -> samp_name, structural_variant_vcf, ref_name, structural_variant_vcf_index
 
-        align_bams.out.aligned_bam.combine(call_variants.out.vcfs, by: 0).set { bams_snps }
+        align_bams.out.aligned_bam.combine(deepvariant.out.vcfs, by: 0).set { bams_snps }
         // combine the bams and vcf channels
         // -> samp_name, aligned_bam, ref_name, bam_index, small_variant_vcf, small_variant_vcf_index
 
