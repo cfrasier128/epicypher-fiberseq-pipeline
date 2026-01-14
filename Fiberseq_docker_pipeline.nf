@@ -42,17 +42,24 @@ process align_bams {
     publishDir "${params.outdir}/2_Aligned-bam/1_Initial-align-temporary"
     cpus 16
     memory '32 GB'
-    container 'cfrasier/epi-pacbio:latest'
+    container 'quay.io/pacbio/pbmm2:1.17.0_build1'
 
     input:
     tuple val(samp_name), path(input_bam), val(ref_name), path(ref_fasta)
 
     output:
-    tuple val(samp_name), path("*aligned.sorted.bam"), val(ref_name), emit: aligned_bam
+    tuple val(samp_name), path("*${ref_name}.bam"), val(ref_name), path("*${ref_name}.bam.bai"), emit: aligned_bam
 
     script:
     """
-    pbmm2 align ${ref_fasta} ${input_bam} ${samp_name}.aligned.sorted.bam -j 14 --preset HIFI --sort -J 2 --log-level INFO
+    pbmm2 align \
+        --preset HIFI --log-level INFO \
+        --num-threads ${task.cpus} \
+        --sort --sort-memory 4G --bam-index BAI \
+        --sample ${samp_name} \
+        ${ref_fasta} \
+        ${input_bam} \
+        ${samp_name}.${ref_name}.bam
     """
 }
 
@@ -66,31 +73,13 @@ process pacbio_qc {
     tuple val(samp_name), path(raw_bam), val(ref_name), path(bam_index)
 
     output:
-    path("ccs.report.json"), path("*plot.png"), emit: pacbio_qc_reports
+    path ("ccs.report.json"), path("*plot.png"), emit: pacbio_qc_reports
 
     script:
     """
     pbindex ${raw_bam} -j ${task.cpus};
     dataset create --type ConsensusReadSet --name \$(echo ${samp_name} | cut -f 2 -d ".") ${samp_name}.hifi_reads.ccsreadset.xml ${raw_bam};
     runqc-reports -b --pdf-report ${samp_name}.pbqc.report.pdf ${samp_name}.hifi_reads.ccsreadset.xml
-    """
-}
-
-process index_bams {
-    publishDir "${params.outdir}/2_Aligned-bam/1_Initial-align"
-    cpus 1
-    memory '4 GB'
-    container 'cfrasier/epi-fiberseq:latest'
-
-    input:
-    tuple val(samp_name), path(sorted_bam), val(ref_name)
-
-    output:
-    tuple val(samp_name), path(sorted_bam), val(ref_name), path("*.bai"), emit: bam_windex
-
-    script:
-    """
-    samtools index -@ ${task.cpus} ${sorted_bam}
     """
 }
 
@@ -302,26 +291,30 @@ process pileupbedgraphtobigwig_nuc {
 workflow {
 
     references_ch = channel.of(
-        [
-            "${params.ref_path}/T2T/chm13v2.0.clean.fasta",
-            "${params.ref_path}/T2T/chm13v2.0.clean.fasta.fai",
-            "T2T",
-        ]
-    )
-    .concat(channel.of(
-        [
-            "${params.ref_path}/hg38/GCF_000001405.40_GRCh38.p14_genomic.NO_ALTS.fa",
-            "${params.ref_path}/hg38/GCF_000001405.40_GRCh38.p14_genomic.NO_ALTS.fa.fai",
-            "hg38",
-        ]
-    ))
-    .concat(channel.of(
-        [
-            "${params.ref_path}/mm10/GCF_000001635.27_GRCm39_genomic.fa",
-            "${params.ref_path}/mm10/GCF_000001635.27_GRCm39_genomic.fa.fai",
-            "mm39",
-        ]
-    ))
+            [
+                "${params.ref_path}/T2T/chm13v2.0.clean.fasta",
+                "${params.ref_path}/T2T/chm13v2.0.clean.fasta.fai",
+                "T2T",
+            ]
+        )
+        .concat(
+            channel.of(
+                [
+                    "${params.ref_path}/hg38/GCF_000001405.40_GRCh38.p14_genomic.NO_ALTS.fa",
+                    "${params.ref_path}/hg38/GCF_000001405.40_GRCh38.p14_genomic.NO_ALTS.fa.fai",
+                    "hg38",
+                ]
+            )
+        )
+        .concat(
+            channel.of(
+                [
+                    "${params.ref_path}/mm10/GCF_000001635.27_GRCm39_genomic.fa",
+                    "${params.ref_path}/mm10/GCF_000001635.27_GRCm39_genomic.fa.fai",
+                    "mm39",
+                ]
+            )
+        )
     // -> ref_fasta, ref_fai, ref_name
 
     called_input_ch = channel.fromPath("${params.input_bam_path}/*${params.input_string_filter}*.bam")
@@ -379,20 +372,17 @@ workflow {
     // -> samp_name, bam_path, ref_name, ref_fasta
 
     align_bams(aligned_bams_input_ch)
-    // -> samp_name, aligned_bam, ref_name
-
-    index_bams(align_bams.out.aligned_bam)
-    // -> samp_name, aligned_bam, ref_name, bam_index
+    // -> samp_name, aligned_bam, ref_name, aligned_bam_index
 
     if (params.pb_qc) {
         // If --pb_qc is set in command line, generate pacbio qc reports
-        pacbio_qc(index_bams.out.bam_windex)
+        pacbio_qc(align_bams.out.aligned_bam)
     }
     // -> json reports, png plots
 
     if (params.phase_reads) {
         // If --phase_reads is set in command line, run hiphase to generate haplotype phased bams
-        index_bams.out.bam_windex
+        align_bams.out.aligned_bam
             .combine(references_ch, by: 2)
             .map { row -> tuple(row[1], row[2], row[0], row[3], row[4], row[5]) }
             .set { variantcalling_bams_input_ch }
@@ -406,7 +396,7 @@ workflow {
         call_structural_variants(variantcalling_bams_input_ch)
         // -> samp_name, structural_variant_vcf, ref_name, structural_variant_vcf_index
 
-        index_bams.out.bam_windex.combine(call_variants.out.vcfs, by: 0).set { bams_snps }
+        align_bams.out.aligned_bam.combine(call_variants.out.vcfs, by: 0).set { bams_snps }
         // combine the bams and vcf channels
         // -> samp_name, aligned_bam, ref_name, bam_index, small_variant_vcf, small_variant_vcf_index
 
@@ -419,13 +409,13 @@ workflow {
             .map { row -> tuple(row[1], row[2], row[0], row[3], row[4], row[6], row[7], row[9], row[10], row[11]) }
             .set { hiphase_input_withref }
         // -> samp_name, aligned_bam, ref_name, bam_index, small_variant_vcf, small_variant_vcf_index, structural_variant_vcf, structural_variant_vcf_index, ref_fasta, ref_fai
-        
+
         hiphase(hiphase_input_withref)
         // -> samp_name, haplotagged_bam, ref_name, haplotagged_bam_index
         call_msps_input_ch = hiphase.out.hap_phased_bams
     }
     else {
-        call_msps_input_ch = index_bams.out.bam_windex
+        call_msps_input_ch = align_bams.out.aligned_bam
     }
 
     call_msps(call_msps_input_ch)
@@ -453,6 +443,5 @@ workflow {
         pileupbedgraphtobigwig_6ma(pileup_withref_ch)
         pileupbedgraphtobigwig_5mC(pileup_withref_ch)
         pileupbedgraphtobigwig_nuc(pileup_withref_ch)
-        // -> samp_name, bigwig
     }
 }
