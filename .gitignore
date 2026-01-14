@@ -6,6 +6,7 @@ references
 singularity_cache
 
 work
+fiberseq_output
 
 .nextflow
 .nextflow*

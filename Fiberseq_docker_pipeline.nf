@@ -2,10 +2,8 @@
 nextflow.enable.dsl = 2
 
 // inputs
-params.input_bam_path = ''
-params.input_string_filter = ''
 params.sample_sheet = ''
-params.ref_path = '/media/genomics/18Tb_1/references'
+params.ref_path = ''
 
 // default parameters
 params.ref_name = 'T2T'
@@ -18,7 +16,7 @@ params.phase_reads = false
 params.create_bigwigs = false
 
 // output directory
-params.outdir = params.input_bam_path + '/fiberseq_output'
+params.outdir = "${workflow.launchDir}/fiberseq_output"
 
 process merge_bams {
     publishDir "${params.outdir}/0_Unaligned-bam/1_Merged-bams", mode: 'copy'
@@ -73,7 +71,7 @@ process pacbio_qc {
     tuple val(samp_name), path(raw_bam), val(ref_name), path(bam_index)
 
     output:
-    path ("ccs.report.json"), path("*plot.png"), emit: pacbio_qc_reports
+    tuple path("ccs.report.json"), path("*plot.png"), emit: pacbio_qc_reports
 
     script:
     """
@@ -316,61 +314,43 @@ workflow {
             )
         )
     // -> ref_fasta, ref_fai, ref_name
+    references_ch.view { v -> "Available reference genome: ${v[2]}" }
 
-    called_input_ch = channel.fromPath("${params.input_bam_path}/*${params.input_string_filter}*.bam")
-    // grabs all bams in the input path
-    called_input_ch.map { file -> tuple(file.baseName.split('\\.')[1], file) }.set { input_bams_names_ch }
-    // get sample name, i.e. drop all extensions; if file is {movie}.{sample_name}.bam, get sample_name, assumes no other dots in sample name
-    // -> sample_name, path_to_bam
-
+    // read in sample sheet and group by sample name
+    // sample sheet columns: samp_name, bam_path, ref_name
     samplesheet_ch = channel.fromPath("${params.sample_sheet}")
         .splitCsv(skip: 1, sep: '\t')
-    // -> biosamplename, wellname, barcode, samplename, ref_name, path
-
-    samplesheet_ch
-        .combine(input_bams_names_ch, by: 0)
-        .set { combined_input_samplesheet_ch }
-    // -> biosamplename, wellname, barcode, samplename, ref_name, path, sample_name, path_to_bam
-
-    combined_input_samplesheet_ch
+        .map { row -> tuple(row[0], file(row[1]), row[2]) }
+        .groupTuple(by: 0)
         .branch { row ->
-            merge: row[3] != ""
-            no_merge: row[3] == ""
+            merge: row[1].size() > 1
+            no_merge: row[1].size() == 1
         }
-        .set { branched_samplesheet_ch }
+    // -> samp_name, [bam_paths], [ref_name]
     // branch based on whether to merge or not based on if samplename is provided in sample sheet
+    // samplesheet_ch.view{ v -> "Sample from sheet: ${v[0]}, bam(s): ${v[1].join(', ')}, reference genome: ${v[2]}" }
+    samplesheet_ch.merge.view { v -> "For sample ${v[0]}, merging BAMs ${v[1].join(', ')}" }
+    samplesheet_ch.no_merge.view { v -> "For sample ${v[0]}, no merging needed for BAM ${v[1][0]}" }
 
-    branched_samplesheet_ch.merge
-        .groupTuple(by: 3)
-        .set { merged_samples_ch }
-    // -> biosamplename, wellname, barcode, samplename, ref_name, path
-    // group by samplename to prepare for merging bams
-
-    merge_bams(merged_samples_ch)
-    // Merge bams based on sample sheet info
+    // merge bams based on sample sheet info
+    merge_bams(samplesheet_ch.merge).merged_bams.map { row -> tuple(row[0], row[1], row[2][0]) }.set { final_merged_bams_ch }
     // -> samp_name, merged_bam, ref_name
 
-    merge_bams.out.merged_bams
-        .map { row -> tuple(row[0], row[1], row[2][0]) }
-        .set { final_merged_bams_ch }
-    // -> samp_name, merged_bam, ref_name
-    // take first reference genome from list
-
-    branched_samplesheet_ch.no_merge
-        .map { row -> tuple(row[0], row[5], row[4]) }
-        .set { no_merge_bams_ch }
+    // for samples that do not need merging, just pass through the bam paths
+    no_merge_bams_ch = samplesheet_ch.no_merge.map { row -> tuple(row[0], row[1][0], row[2][0]) }
     // -> samp_name, bam_path, ref_name
 
-    final_merged_bams_ch.concat(no_merge_bams_ch).set { all_bams_ch }
     // combine merged and unmerged bams into single channel
+    all_bams_ch = final_merged_bams_ch.concat(no_merge_bams_ch)
     // -> samp_name, bam_path, ref_name
+    all_bams_ch.view { v -> "To be aligned: sample ${v[0]}, bam ${v[1]}, reference genome ${v[2]}" }
 
+    // align the bams to the reference genome
     all_bams_ch
         .combine(references_ch, by: 2)
         .map { row -> tuple(row[1], row[2], row[0], row[3]) }
         .set { aligned_bams_input_ch }
     // -> samp_name, bam_path, ref_name, ref_fasta
-
     align_bams(aligned_bams_input_ch)
     // -> samp_name, aligned_bam, ref_name, aligned_bam_index
 
