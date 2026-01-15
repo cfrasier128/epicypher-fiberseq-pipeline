@@ -27,3 +27,12 @@ wget https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/635/GCF_000001635.27_G
 gunzip -c GCA_000001635.9_GRCm39_full_analysis_set.fna.gz > mm39.fasta
 samtools faidx mm39.fasta
 cd ../../
+
+# Mouse mm10 assembly initial release
+# https://hgdownload.gi.ucsc.edu/goldenPath/mm10/bigZips/
+mkdir -p references/mm10
+cd references/mm10 || exit 1
+wget https://hgdownload.gi.ucsc.edu/goldenPath/mm10/bigZips/initial/mm10.fa.gz
+gunzip -c mm10.fa.gz > mm10.fasta
+samtools faidx mm10.fasta
+cd ../../

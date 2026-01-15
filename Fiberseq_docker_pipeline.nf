@@ -6,7 +6,7 @@ params.sample_sheet = ''
 params.ref_path = "${workflow.launchDir}/references"
 
 // default parameters
-params.ref_name = 'hg38'
+params.ref_name = 't2t'
 params.confidence_ml_val = '250'
 params.minimum_msp_dist = '10'
 
@@ -288,6 +288,15 @@ workflow {
                     "${params.ref_path}/mm39/mm39.fasta",
                     "${params.ref_path}/mm39/mm39.fasta.fai",
                     "mm39",
+                ]
+            )
+        )
+        .concat(
+            channel.of(
+                [
+                    "${params.ref_path}/mm10/mm10.fasta",
+                    "${params.ref_path}/mm10/mm10.fasta.fai",
+                    "mm10",
                 ]
             )
         )
