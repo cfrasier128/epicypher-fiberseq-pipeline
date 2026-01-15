@@ -196,16 +196,15 @@ process call_msps {
     tuple val(samp_name), path(aligned_bam), val(ref_name), path(bam_index)
 
     output:
-    tuple val(samp_name), path("*.sorted.bam"), val(ref_name), emit: msp_bams
-    path ("*.bai"), emit: msp_bams_index
+    tuple val(samp_name), path("*.nucs.bam"), val(ref_name), path("*.nucs.bam.bai"), emit: msp_bams
 
     script:
     """
     conda run -n fiberseq-qc ft add-nucleosomes \
         --threads ${task.cpus} --ml ${params.confidence_ml_val} \
         -v \
-        ${aligned_bam} ${samp_name}.6ma.nucs.sorted.bam;
-    samtools index -@ ${task.cpus} ${samp_name}.6ma.nucs.sorted.bam;
+        ${aligned_bam} ${samp_name}.${ref_name}.6ma.nucs.bam;
+    samtools index -@ ${task.cpus - 1} ${samp_name}.${ref_name}.6ma.nucs.bam;
     """
 }
 
@@ -216,7 +215,7 @@ process fiberseq_qc {
     container 'cfrasier/epi-fiberseq:latest'
 
     input:
-    tuple val(samp_name), path(aligned_bam), val(ref_name)
+    tuple val(samp_name), path(aligned_bam), val(ref_name), path(bam_index)
 
     output:
     tuple val(samp_name), path("*"), val(ref_name)
@@ -235,8 +234,7 @@ process create_pileups {
     container 'cfrasier/epi-fiberseq:latest'
 
     input:
-    tuple val(samp_name), path(aligned_bam), val(ref_name)
-    path bam_index
+    tuple val(samp_name), path(aligned_bam), val(ref_name), path(bam_index)
 
     output:
     tuple val(samp_name), path("*.tsv"), val(ref_name), emit: pileups
@@ -304,7 +302,7 @@ workflow {
             )
         )
     // -> ref_fasta, ref_fai, ref_name
-    references_ch.view { v -> "Available reference genome: ${v[2]}" }
+    // references_ch.view { v -> "Available reference genome: ${v[2]}" }
 
     // read in sample sheet and group by sample name
     // sample sheet columns: samp_name, bam_path, ref_name
@@ -319,8 +317,8 @@ workflow {
     // -> samp_name, [bam_paths], [ref_name]
     // branch based on whether to merge or not based on if samplename is provided in sample sheet
     // samplesheet_ch.view{ v -> "Sample from sheet: ${v[0]}, bam(s): ${v[1].join(', ')}, reference genome: ${v[2]}" }
-    samplesheet_ch.merge.view { v -> "For sample ${v[0]}, merging BAMs ${v[1].join(', ')}" }
-    samplesheet_ch.no_merge.view { v -> "For sample ${v[0]}, no merging needed for BAM ${v[1][0]}" }
+    // samplesheet_ch.merge.view { v -> "For sample ${v[0]}, merging BAMs ${v[1].join(', ')}" }
+    // samplesheet_ch.no_merge.view { v -> "For sample ${v[0]}, no merging needed for BAM ${v[1][0]}" }
 
     // merge bams based on sample sheet info
     merge_bams(samplesheet_ch.merge).merged_bams.map { row -> tuple(row[0], row[1], row[2][0]) }.set { final_merged_bams_ch }
@@ -333,7 +331,7 @@ workflow {
     // combine merged and unmerged bams into single channel
     all_bams_ch = final_merged_bams_ch.concat(no_merge_bams_ch)
     // -> samp_name, bam_path, ref_name
-    all_bams_ch.view { v -> "To be aligned: sample ${v[0]}, bam ${v[1]}, reference genome ${v[2]}" }
+    // all_bams_ch.view { v -> "To be aligned: sample ${v[0]}, bam ${v[1]}, reference genome ${v[2]}" }
 
     // align the bams to the reference genome
     all_bams_ch
@@ -362,25 +360,20 @@ workflow {
         deepvariant(variantcalling_bams_input_ch)
         // -> samp_name, small_variant_vcf, ref_name, small_variant_vcf_index
 
-        // call structural variants using pbsv
+        // call structural variants using sawfish
         sawfish(variantcalling_bams_input_ch)
         // -> samp_name, structural_variant_vcf, ref_name, structural_variant_vcf_index
 
-        align_bams.out.aligned_bam.combine(deepvariant.out.vcfs, by: 0).set { bams_snps }
-        // combine the bams and vcf channels
-        // -> samp_name, aligned_bam, ref_name, bam_index, small_variant_vcf, small_variant_vcf_index
-
-        bams_snps.combine(sawfish.out.structural_variants, by: 0).set { hiphase_input }
-        // combine the bams and sv channels
-        // -> samp_name, aligned_bam, ref_name, bam_index, small_variant_vcf, small_variant_vcf_index, structural_variant_vcf, structural_variant_vcf_index
-
-        hiphase_input
+        align_bams.out.aligned_bam
+            .combine(deepvariant.out.vcfs, by: 0)
+            .combine(sawfish.out.structural_variants, by: 0)
             .combine(references_ch, by: 2)
             .map { row -> tuple(row[1], row[2], row[0], row[3], row[4], row[6], row[7], row[9], row[10], row[11]) }
-            .set { hiphase_input_withref }
+            .set { hiphase_input }
         // -> samp_name, aligned_bam, ref_name, bam_index, small_variant_vcf, small_variant_vcf_index, structural_variant_vcf, structural_variant_vcf_index, ref_fasta, ref_fai
 
-        hiphase(hiphase_input_withref)
+        // run hiphase to generate haplotype phased bams
+        hiphase(hiphase_input)
         // -> samp_name, haplotagged_bam, ref_name, haplotagged_bam_index
         call_msps_input_ch = hiphase.out.hap_phased_bams
     }
@@ -390,17 +383,15 @@ workflow {
 
     // add nucleosomes and MSPs to the bams
     call_msps(call_msps_input_ch)
-    // -> samp_name, msp_bam, ref_name
-    // -> msp_bam_index
+    // -> samp_name, msp_bam, ref_name, msp_bam_index
 
     // run stergachis fiberseq qc on bams that have been run through add-nucleosomes
     fiberseq_qc(call_msps.out.msp_bams)
     // -> samp_name, qc_files, ref_name
 
-
     if (params.create_bigwigs) {
         // If --create_bigwigs is set in command line, create pileups and bigwigs
-        create_pileups(call_msps.out.msp_bams, call_msps.out.msp_bams_index)
+        create_pileups(call_msps.out.msp_bams)
         // -> samp_name, pileups, ref_name
         // create a bedgraph of 6ma calling and calculate percent 6ma coverage for each base
         create_pileups.out.pileups
@@ -409,8 +400,7 @@ workflow {
             .set { pileup_withref_ch }
         // -> samp_name, pileups, ref_name, ref_fai
         // convert the pileup bedgraph into a bigwig for downstream purposes
-        pileup_withref_ch
-            .map { row -> tuple(row[0], row[1], row[2], row[3], "perc6ma", 4) }
+        pileup_withref_ch.map { row -> tuple(row[0], row[1], row[2], row[3], "perc6ma", 4) }
             .concat(pileup_withref_ch.map { row -> tuple(row[0], row[1], row[2], row[3], "perccpg", 5) })
             .concat(pileup_withref_ch.map { row -> tuple(row[0], row[1], row[2], row[3], "percnuc", 6) })
             .set { pileup_bedgraph_ch }
