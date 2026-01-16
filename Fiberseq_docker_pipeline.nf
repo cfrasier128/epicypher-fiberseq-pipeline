@@ -19,6 +19,9 @@ params.debug = false
 // output directory
 params.outdir = "${workflow.launchDir}/fiberseq_output"
 
+// Grab subworkflows
+include { fiberseq_qc_workflow } from './subworkflows/fiberseq-qc.nf'
+
 process merge_bams {
     publishDir "${params.outdir}/0_Unaligned-bam/1_Merged-bams", mode: 'copy'
     label 'large'
@@ -382,7 +385,7 @@ workflow {
     // -> samp_name, msp_bam, ref_name, msp_bam_index
 
     // run stergachis fiberseq qc on bams that have been run through add-nucleosomes
-    fiberseq_qc(call_msps.out.msp_bams)
+    fiberseq_qc_workflow(call_msps.out.msp_bams)
     // -> samp_name, qc_files, ref_name
 
     if (params.create_bigwigs) {
