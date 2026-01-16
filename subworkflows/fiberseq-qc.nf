@@ -14,7 +14,16 @@ process create_qc_table {
     env("nreads"), emit: nreads
     script:
     """
-    tech=`samtools view -H $bam_file | grep -e "PL:" | awk 'NR == 1' | tr '\t' '\n' | awk '\$1 ~ /^PL:/' | cut -f2 -d':' | tr '[[:upper:]]' '[[:lower:]]' || true`
+    python3 << EOF ${bam_file} > tech
+    import sys,pysam
+    save = pysam.set_verbosity(0)  # suppress [E::idx_find_and_load]
+    with pysam.AlignmentFile(sys.argv[1], check_sq=False) as bf:
+      pysam.set_verbosity(save)  # restore warnings
+      rgs = bf.header.get("RG", []) or []
+      pls = {rg.get("PL") for rg in rgs if rg.get("PL") is not None}
+      print(sorted(pls)[0].lower())
+    EOF
+    tech=`cat tech`
     nreads=`samtools view -c $bam_file`
     export tech
     export nreads
