@@ -142,13 +142,13 @@ process plot_readlengths {
 
     script:
     """
-    if [[ "\$tech" == "pacbio" ]]; then
-        export max_scale=25000
-    fi
-    if [[ "\$tech" == "ont" ]]; then
+    #if [[ "\${tech}" == "pacbio" ]]; then
+    #    export max_scale=25000
+    #fi
+    #if [[ "\${tech}" == "ont" ]]; then
         export max_scale=50000
-    fi
-    /opt/fiberseq/details/make-plot-readlengths.sh ${sample_id} ${qc_table} \$max_scale ${sample_id}.readlengths.pdf ${sample_id}.readlengths.intermediate.stat.txt
+    #fi
+    /opt/fiberseq/details/make-plot-readlengths.sh ${sample_id} ${qc_table} \${max_scale} ${sample_id}.readlengths.pdf ${sample_id}.readlengths.intermediate.stat.txt
     """
 }
 
