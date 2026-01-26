@@ -408,7 +408,8 @@ workflow {
             .set { pileup_withref_ch }
         // -> samp_name, pileups, ref_name, ref_fai
         // convert the pileup bedgraph into a bigwig for downstream purposes
-        pileup_withref_ch.map { row -> tuple(row[0], row[1], row[2], row[3], "perc6ma", 4) }
+        pileup_withref_ch
+            .map { row -> tuple(row[0], row[1], row[2], row[3], "perc6ma", 4) }
             .concat(pileup_withref_ch.map { row -> tuple(row[0], row[1], row[2], row[3], "perccpg", 5) })
             .concat(pileup_withref_ch.map { row -> tuple(row[0], row[1], row[2], row[3], "percnuc", 6) })
             .set { pileup_bedgraph_ch }
