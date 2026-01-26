@@ -248,11 +248,11 @@ process create_pileups {
 
 process pileupbedgraphtobigwig {
     publishDir "${params.outdir}/4_Pileups_Bigwigs/2_BigWigs/", mode: 'copy'
-    label 'small'
-    container 'cfrasier/epi-fiberseq:latest'
+    label 'large'
+    container 'quay.io/pacbio/bigtools:3844b58_build1'
 
     input:
-    tuple val(samp_name), path(pileup), val(ref_name), path(ref_fai), val(feature), val(col_num)
+    tuple val(samp_name), path(bedgraph), val(ref_name), path(ref_fai), val(feature), val(col_num)
 
     output:
     tuple val(samp_name), path("*.bw")
@@ -260,8 +260,13 @@ process pileupbedgraphtobigwig {
     script:
     """
     cut -f 1,2 ${ref_fai} > chromsizes
-    cut -f 1,2,3,${col_num} ${pileup} > temp.bedgraph
-    bedGraphToBigWig temp.bedgraph chromsizes ${samp_name}.${feature}.bw
+    cut -f 1,2,3,${col_num} ${bedgraph} | grep -v '^#' | sort -k1,1 -k2,2n > temp.bedgraph
+    
+    bedgraphtobigwig \
+        --nthreads ${task.cpus} \
+        temp.bedgraph \
+        chromsizes \
+        ${samp_name}.${feature}.bw
     """
 }
 
