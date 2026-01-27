@@ -1,4 +1,4 @@
-bin
+nextflow
 
 inputs
 references
@@ -6,7 +6,7 @@ references
 singularity_cache
 
 work
-fiberseq_output
+results
 *.html
 trace*.txt
 

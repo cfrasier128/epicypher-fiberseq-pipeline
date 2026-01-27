@@ -17,30 +17,12 @@ params.create_bigwigs = false
 params.debug = false
 
 // output directory
-params.outdir = "${workflow.launchDir}/fiberseq_output"
+params.outdir = "${workflow.launchDir}/results"
 
 // Grab subworkflows
 include { fiberseq_qc_workflow } from './subworkflows/fiberseq-qc.nf'
 
-process merge_bams {
-    publishDir "${params.outdir}/0_Unaligned-bam/1_Merged-bams", mode: 'copy'
-    label 'large'
-    container 'cfrasier/epi-pacbio:latest'
-
-    input:
-    tuple val(input_sample_names), val(well_names), val(barcodes), val(output_sample_name), val(ref_name), path(input_bam_files)
-
-    output:
-    tuple val(output_sample_name), path("${output_sample_name}.${barcodes.join('_')}.merged.bam"), val(ref_name), emit: merged_bams
-
-    script:
-    """
-    pbmerge ${input_bam_files.join(' ')} -o ${output_sample_name}.${barcodes.join('_')}.merged.bam
-    """
-}
-
 process align_bams {
-    publishDir "${params.outdir}/2_Aligned-bam/1_Initial-align-temporary"
     label 'very_large'
     container 'quay.io/pacbio/pbmm2:1.17.0_build1'
 
@@ -48,23 +30,46 @@ process align_bams {
     tuple val(samp_name), path(input_bam), val(ref_name), path(ref_fasta)
 
     output:
-    tuple val(samp_name), path("*${ref_name}.bam"), val(ref_name), path("*${ref_name}.bam.bai"), emit: aligned_bam
+    tuple val(samp_name), path("*aligned.bam"), val(ref_name), path("*aligned.bam.bai"), emit: aligned_bam
 
     script:
     """
+    out_prefix=\$(basename ${input_bam} .bam)
+
     pbmm2 align \
         --preset HIFI --log-level INFO \
+        --strip \
         --num-threads ${task.cpus} \
         --sort --sort-memory 4G --bam-index BAI \
         --sample ${samp_name} \
         ${ref_fasta} \
         ${input_bam} \
-        ${samp_name}.${ref_name}.bam
+        \${out_prefix}.aligned.bam
+    """
+}
+
+process merge_bams {
+    label 'large'
+    container 'cfrasier/epi-pacbio:latest'
+
+    input:
+    tuple val(samp_name), path(input_bam_files), val(ref_name), val(input_bam_index_files)
+
+    output:
+    tuple val(samp_name), path("${samp_name}.${ref_name}.aligned.bam"), val(ref_name), path("${samp_name}.${ref_name}.aligned.bam.bai"), emit: merged_bams
+
+    script:
+    """
+    pbmerge \
+        --no-pbi --num-threads ${task.cpus} \
+        -o ${samp_name}.${ref_name}.aligned.bam \
+        ${input_bam_files.join(' ')}
+    samtools index -@ ${task.cpus - 1} ${samp_name}.${ref_name}.aligned.bam
     """
 }
 
 process pacbio_qc {
-    publishDir "${params.outdir}/6_Seq_Stats/${samp_name}", mode: 'copy'
+    publishDir "${params.outdir}/sequencing_qc/${samp_name}", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-pacbio:latest'
 
@@ -83,7 +88,6 @@ process pacbio_qc {
 }
 
 process deepvariant {
-    publishDir "${params.outdir}/2_Aligned-bam/2_Variant-calling/", mode: 'copy'
     label 'very_large'
     container 'google/deepvariant:1.9.0'
 
@@ -105,7 +109,6 @@ process deepvariant {
 }
 
 process pbsv {
-    publishDir "${params.outdir}/2_Aligned-bam/2_Variant-calling/", mode: 'copy'
     label 'large'
     container 'quay.io/pacbio/pbsv:2.11.0_build1'
 
@@ -126,7 +129,6 @@ process pbsv {
 
 process sawfish {
     // we need to check the performance of this task for samples with <10x coverage
-    publishDir "${params.outdir}/2_Aligned-bam/2_Variant-calling/", mode: 'copy'
     label 'very_large'
     container 'quay.io/pacbio/sawfish:2.2.1_build1'
 
@@ -156,7 +158,7 @@ process sawfish {
 }
 
 process hiphase {
-    publishDir "${params.outdir}/2_Aligned-bam/3_Haplotype-phased/", mode: 'copy'
+    publishDir "${params.outdir}/phased_output/${samp_name}", mode: 'copy'
     label 'large'
     container 'quay.io/pacbio/hiphase:1.5.0_build1'
 
@@ -184,7 +186,7 @@ process hiphase {
 }
 
 process call_msps {
-    publishDir "${params.outdir}/3_Fibertools/1_FIRE-bams/", mode: 'copy'
+    publishDir "${params.outdir}/fire_bams/${samp_name}", mode: 'copy'
     label 'large'
     container 'cfrasier/epi-fiberseq:latest'
 
@@ -205,7 +207,7 @@ process call_msps {
 }
 
 process fiberseq_qc {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${samp_name}", mode: 'copy'
     label 'large'
     container 'cfrasier/epi-fiberseq:latest'
 
@@ -223,7 +225,7 @@ process fiberseq_qc {
 }
 
 process create_pileups {
-    publishDir "${params.outdir}/4_Pileups_Bigwigs/1_Pileups/"
+    publishDir "${params.outdir}/pileups/${samp_name}", mode: 'copy'
     label 'medium'
     container 'cfrasier/epi-fiberseq:latest'
 
@@ -247,7 +249,7 @@ process create_pileups {
 }
 
 process pileupbedgraphtobigwig {
-    publishDir "${params.outdir}/4_Pileups_Bigwigs/2_BigWigs/", mode: 'copy'
+    publishDir "${params.outdir}/pileups/${samp_name}", mode: 'copy'
     label 'large'
     container 'quay.io/pacbio/bigtools:3844b58_build1'
 
@@ -315,55 +317,44 @@ workflow {
 
     // read in sample sheet and group by sample name
     // sample sheet columns: samp_name, bam_path, ref_name
-    samplesheet_ch = channel.fromPath("${params.sample_sheet}")
+    sample_sheet_ch = channel.fromPath("${params.sample_sheet}")
         .splitCsv(skip: 1, sep: '\t')
         .map { row -> tuple(row[0], file(row[1]), row[2]) }
-        .groupTuple(by: 0)
-        .branch { row ->
-            merge: row[1].size() > 1
-            no_merge: row[1].size() == 1
-        }
-    // -> samp_name, [bam_paths], [ref_name]
-    // branch based on whether to merge or not based on if samplename is provided in sample sheet
-    // samplesheet_ch.view{ v -> "Sample from sheet: ${v[0]}, bam(s): ${v[1].join(', ')}, reference genome: ${v[2]}" }
     if (params.debug) {
-        samplesheet_ch.merge.view { v -> "For sample ${v[0]}, merging BAMs ${v[1].join(', ')}" }
-        samplesheet_ch.no_merge.view { v -> "For sample ${v[0]}, no merging needed for BAM ${v[1][0]}" }
+        sample_sheet_ch.view { v -> "Sample sheet entry: sample ${v[0]}, bam ${v[1]}, reference genome ${v[2]}" }
     }
 
-    // merge bams based on sample sheet info
-    merge_bams(samplesheet_ch.merge).merged_bams.map { row -> tuple(row[0], row[1], row[2][0]) }.set { final_merged_bams_ch }
-    // -> samp_name, merged_bam, ref_name
-
-    // for samples that do not need merging, just pass through the bam paths
-    no_merge_bams_ch = samplesheet_ch.no_merge.map { row -> tuple(row[0], row[1][0], row[2][0]) }
-    // -> samp_name, bam_path, ref_name
-
-    // combine merged and unmerged bams into single channel
-    all_bams_ch = final_merged_bams_ch.concat(no_merge_bams_ch)
-    // -> samp_name, bam_path, ref_name
+    aligned_bams_input_ch = sample_sheet_ch
+        .combine(references_ch, by: 2)
+        .map { row -> tuple(row[1], row[2], row[0], row[3]) }
+    // -> samp_name, bam_paths, ref_name, ref_fasta
     if (params.debug) {
-        all_bams_ch.view { v -> "To be aligned: sample ${v[0]}, bam ${v[1]}, reference genome ${v[2]}" }
+        aligned_bams_input_ch.view { v -> "To be aligned: sample ${v[0]}, bam ${v[1]}, reference genome ${v[2]}" }
     }
 
     // align the bams to the reference genome
-    all_bams_ch
-        .combine(references_ch, by: 2)
-        .map { row -> tuple(row[1], row[2], row[0], row[3]) }
-        .set { aligned_bams_input_ch }
-    // -> samp_name, bam_path, ref_name, ref_fasta
     align_bams(aligned_bams_input_ch)
     // -> samp_name, aligned_bam, ref_name, aligned_bam_index
 
+    align_bams.out.aligned_bam
+        .groupTuple(by: 0)
+        .map { row -> tuple(row[0], row[1], row[2][0], row[3]) }
+        .set { merge_bams_input_ch }
+    // -> samp_name, [aligned_bam], ref_name, aligned_bam_index
+
+    // merge the aligned bams based on sample name
+    merge_bams(merge_bams_input_ch)
+    // -> samp_name, merged_bam, ref_name, merged_bam_index
+
     if (params.pb_qc) {
         // If --pb_qc is set in command line, generate pacbio qc reports
-        pacbio_qc(align_bams.out.aligned_bam)
+        pacbio_qc(merge_bams.out.merged_bams)
     }
     // -> json reports, png plots
 
     if (params.phase_reads) {
         // If --phase_reads is set in command line, run hiphase to generate haplotype phased bams
-        align_bams.out.aligned_bam
+        merge_bams.out.merged_bams
             .combine(references_ch, by: 2)
             .map { row -> tuple(row[1], row[2], row[0], row[3], row[4], row[5]) }
             .set { variantcalling_bams_input_ch }
@@ -377,7 +368,7 @@ workflow {
         sawfish(variantcalling_bams_input_ch)
         // -> samp_name, structural_variant_vcf, ref_name, structural_variant_vcf_index
 
-        align_bams.out.aligned_bam
+        merge_bams.out.merged_bams
             .combine(deepvariant.out.vcfs, by: 0)
             .combine(sawfish.out.structural_variants, by: 0)
             .combine(references_ch, by: 2)
@@ -391,7 +382,7 @@ workflow {
         call_msps_input_ch = hiphase.out.hap_phased_bams
     }
     else {
-        call_msps_input_ch = align_bams.out.aligned_bam
+        call_msps_input_ch = merge_bams.out.merged_bams
     }
 
     // add nucleosomes and MSPs to the bams

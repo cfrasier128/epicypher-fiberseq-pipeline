@@ -2,7 +2,7 @@
 nextflow.enable.dsl = 2
 
 process create_qc_table {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'large'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -16,8 +16,15 @@ process create_qc_table {
 
     script:
     """
-    tech=`samtools view -H ${bam_file} | grep -e "PL:" | awk 'NR == 1' | tr '\t' '\n' | awk '\$1 ~ /^PL:/' | cut -f2 -d':' | tr '[[:upper:]]' '[[:lower:]]' || true`
-    nreads=`samtools view -c ${bam_file}`
+    tech=\$(samtools view -H ${bam_file} \
+        | grep -e "PL:" \
+        | awk 'NR == 1' \
+        | tr '\t' '\n' \
+        | awk '\$1 ~ /^PL:/' \
+        | cut -f2 -d':' \
+        | tr '[[:upper:]]' '[[:lower:]]' \
+        || true)
+    nreads=\$(samtools view -c ${bam_file})
     export tech
     export nreads
     ft extract -t 8 ${bam_file} --all - \
@@ -27,7 +34,7 @@ process create_qc_table {
 }
 
 process plot_msp_lengths {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -39,12 +46,16 @@ process plot_msp_lengths {
 
     script:
     """
-    /opt/fiberseq/details/make-plot-msp-lengths.sh ${sample_id} ${qc_table} ${sample_id}.msp_lengths.pdf ${sample_id}.msp_lengths.intermediate.stat.txt
+    /opt/fiberseq/details/make-plot-msp-lengths.sh \
+        ${sample_id} \
+        ${qc_table} \
+        ${sample_id}.msp_lengths.pdf \
+        ${sample_id}.msp_lengths.intermediate.stat.txt
     """
 }
 
 process plot_nuc_lengths {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -56,12 +67,16 @@ process plot_nuc_lengths {
 
     script:
     """
-    /opt/fiberseq/details/make-plot-nuc-lengths.sh ${sample_id} ${qc_table} ${sample_id}.nuc_lengths.pdf ${sample_id}.nuc_lengths.intermediate.stat.txt
+    /opt/fiberseq/details/make-plot-nuc-lengths.sh \
+        ${sample_id} \
+        ${qc_table} \
+        ${sample_id}.nuc_lengths.pdf \
+        ${sample_id}.nuc_lengths.intermediate.stat.txt
     """
 }
 
 process plot_6ma {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -73,12 +88,18 @@ process plot_6ma {
 
     script:
     """
-    /opt/fiberseq/details/make-plot-number-m6a-per-read.sh ${sample_id} ${qc_table} ${sample_id}.m6a_per_read.pdf ${sample_id}.m6a_per_read.intermediate.stat.txt ${sample_id}.ccs_passes.pdf ${sample_id}.ccs_passes.intermediate.stat.txt
+    /opt/fiberseq/details/make-plot-number-m6a-per-read.sh \
+        ${sample_id} \
+        ${qc_table} \
+        ${sample_id}.m6a_per_read.pdf \
+        ${sample_id}.m6a_per_read.intermediate.stat.txt \
+        ${sample_id}.ccs_passes.pdf \
+        ${sample_id}.ccs_passes.intermediate.stat.txt
     """
 }
 
 process plot_nucs_per_read {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -90,12 +111,16 @@ process plot_nucs_per_read {
 
     script:
     """
-    /opt/fiberseq/details/make-plot-number-nucs-per-read.sh ${sample_id} ${qc_table} ${sample_id}.number_nucs_per_read.pdf ${sample_id}.number_nucs_per_read.intermediate.stat.txt
+    /opt/fiberseq/details/make-plot-number-nucs-per-read.sh \
+        ${sample_id} \
+        ${qc_table} \
+        ${sample_id}.number_nucs_per_read.pdf \
+        ${sample_id}.number_nucs_per_read.intermediate.stat.txt
     """
 }
 
 process plot_5mCs_per_read {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -107,12 +132,16 @@ process plot_5mCs_per_read {
 
     script:
     """
-    /opt/fiberseq/details/make-plot-number-mcpgs-per-read.sh ${sample_id} ${qc_table} ${sample_id}.number_cpgs_per_read.pdf ${sample_id}.number_cpgs_per_read.intermediate.stat.txt
+    /opt/fiberseq/details/make-plot-number-mcpgs-per-read.sh \
+        ${sample_id} \
+        ${qc_table} \
+        ${sample_id}.number_cpgs_per_read.pdf \
+        ${sample_id}.number_cpgs_per_read.intermediate.stat.txt
     """
 }
 
 process plot_readlength_per_nuc {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -124,12 +153,16 @@ process plot_readlength_per_nuc {
 
     script:
     """
-    /opt/fiberseq/details/make-plot-readlength-per-nuc.sh ${sample_id} ${qc_table} ${sample_id}.readlength_per_nuc.pdf ${sample_id}.readlength_per_nuc.intermediate.stat.txt
+    /opt/fiberseq/details/make-plot-readlength-per-nuc.sh \
+        ${sample_id} \
+        ${qc_table} \
+        ${sample_id}.readlength_per_nuc.pdf \
+        ${sample_id}.readlength_per_nuc.intermediate.stat.txt
     """
 }
 
 process plot_readlengths {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -148,12 +181,17 @@ process plot_readlengths {
     #if [[ "\${tech}" == "ont" ]]; then
         export max_scale=50000
     #fi
-    /opt/fiberseq/details/make-plot-readlengths.sh ${sample_id} ${qc_table} \${max_scale} ${sample_id}.readlengths.pdf ${sample_id}.readlengths.intermediate.stat.txt
+    /opt/fiberseq/details/make-plot-readlengths.sh \
+        ${sample_id} \
+        ${qc_table} \
+        \${max_scale} \
+        ${sample_id}.readlengths.pdf \
+        ${sample_id}.readlengths.intermediate.stat.txt
     """
 }
 
 process plot_msp_resolution {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -165,12 +203,16 @@ process plot_msp_resolution {
 
     script:
     """
-    /opt/fiberseq/details/make-plot-msp-resolution.sh ${sample_id} ${qc_table} ${sample_id}.msp_resolution.pdf ${sample_id}.msp_resolution.intermediate.stat.txt
+    /opt/fiberseq/details/make-plot-msp-resolution.sh \
+        ${sample_id} \
+        ${qc_table} \
+        ${sample_id}.msp_resolution.pdf \
+        ${sample_id}.msp_resolution.intermediate.stat.txt
     """
 }
 
 process plot_read_quality {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -182,12 +224,16 @@ process plot_read_quality {
 
     script:
     """
-    /opt/fiberseq/details/make-plot-rq.sh ${sample_id} ${qc_table} ${sample_id}.readquality.pdf ${sample_id}.readquality.intermediate.stat.txt
+    /opt/fiberseq/details/make-plot-rq.sh \
+        ${sample_id} \
+        ${qc_table} \
+        ${sample_id}.readquality.pdf \
+        ${sample_id}.readquality.intermediate.stat.txt
     """
 }
 
 process plot_autocorrelation {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -200,12 +246,17 @@ process plot_autocorrelation {
 
     script:
     """
-    /opt/fiberseq/details/make-plot-autocorrelation.v2.sh ${sample_id} ${bam_file} ${sample_id}.autocorrelation.pdf ${sample_id}.autocorrelation.intermediate.stat.txt \$tech
+    /opt/fiberseq/details/make-plot-autocorrelation.v2.sh \
+        ${sample_id} \
+        ${bam_file} \
+        ${sample_id}.autocorrelation.pdf \
+        ${sample_id}.autocorrelation.intermediate.stat.txt \
+        \$tech
     """
 }
 
 process plot_randfibers {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -217,12 +268,17 @@ process plot_randfibers {
 
     script:
     """
-    /opt/fiberseq/details/make-plot-rand-fibers.sh ${sample_id} ${bam_file} 0 20000 ${sample_id}.randfibers.pdf ${sample_id}.randfibers.intermediate.stat.txt
+    /opt/fiberseq/details/make-plot-rand-fibers.sh \
+        ${sample_id} \
+        ${bam_file} \
+        0 20000 \
+        ${sample_id}.randfibers.pdf \
+        ${sample_id}.randfibers.intermediate.stat.txt
     """
 }
 
 process plot_zoomed_randfibers {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -234,12 +290,17 @@ process plot_zoomed_randfibers {
 
     script:
     """
-    /opt/fiberseq/details/make-plot-rand-fibers.sh ${sample_id} ${bam_file} 2000 4000 ${sample_id}.randfibers.2K-4K.pdf ${sample_id}.randfibers.2K-4K.intermediate.stat.txt
+    /opt/fiberseq/details/make-plot-rand-fibers.sh \
+        ${sample_id} \
+        ${bam_file} \
+        2000 4000 \
+        ${sample_id}.randfibers.2K-4K.pdf \
+        ${sample_id}.randfibers.2K-4K.intermediate.stat.txt
     """
 }
 
 process join_qc {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -253,14 +314,14 @@ process join_qc {
     script:
     """
     echo \$nreads \
-  | awk '{ printf "# Note: ***Unaligned Reads***\n# Stats: nreads\nNumber(Reads)=%s\n\n", \$1; }' \
-  | cat - *txt \
- > ${sample_id}.qc_stats.txt
+    | awk '{ printf "# Note: ***Unaligned Reads***\n# Stats: nreads\nNumber(Reads)=%s\n\n", \$1; }' \
+    | cat - *txt \
+    > ${sample_id}.qc_stats.txt
     """
 }
 
 process make_html {
-    publishDir "${params.outdir}/3_Fibertools/2_Fiberseq-qc/", mode: 'copy'
+    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -276,10 +337,10 @@ process make_html {
     script:
     """
     /opt/fiberseq/details/make-html.tcsh \
-    ${sample_id} \
-    \$nreads \
-    ${sample_id}.overview.html \
-    ${sample_id}.qc.html \
+        ${sample_id} \
+        \$nreads \
+        ${sample_id}.overview.html \
+        ${sample_id}.qc.html \
     
     """
 }
