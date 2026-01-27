@@ -206,24 +206,6 @@ process call_msps {
     """
 }
 
-process fiberseq_qc {
-    publishDir "${params.outdir}/fiberseq-qc/${samp_name}", mode: 'copy'
-    label 'large'
-    container 'cfrasier/epi-fiberseq:latest'
-
-    input:
-    tuple val(samp_name), path(aligned_bam), val(ref_name), path(bam_index)
-
-    output:
-    tuple val(samp_name), path("*"), val(ref_name)
-
-    script:
-    """
-    conda run -n fiberseq-qc runall-qc.V2.tcsh ./ ${samp_name} ${aligned_bam};
-    awk -F '\t' '{total_A+=\$12}; {meth_A+=\$13} END {print meth_A/total_A}' *.all.tbl > ${samp_name}.6ma.methylation_rate.txt;
-    """
-}
-
 process create_pileups {
     publishDir "${params.outdir}/pileups/${samp_name}", mode: 'copy'
     label 'medium'
@@ -233,7 +215,7 @@ process create_pileups {
     tuple val(samp_name), path(aligned_bam), val(ref_name), path(bam_index)
 
     output:
-    tuple val(samp_name), path("*.tsv"), val(ref_name), emit: pileups
+    tuple val(samp_name), path("*.tsv.gz"), val(ref_name), emit: pileups
 
     script:
     """
@@ -244,7 +226,7 @@ process create_pileups {
         --ftx "len(msp)>${params.minimum_msp_dist}" \
         ${aligned_bam} \
     | awk -v OFS="\t" -v FS="\t" '{print \$1,\$2,\$3,\$9/(\$4+0.1),\$10/(\$4+0.1),\$7/(\$4+0.1)}' \
-    > ${samp_name}.pileup_all.tsv
+    | gzip -c > ${samp_name}.pileup_all.tsv.gz
     """
 }
 
@@ -262,7 +244,11 @@ process pileupbedgraphtobigwig {
     script:
     """
     cut -f 1,2 ${ref_fai} > chromsizes
-    cut -f 1,2,3,${col_num} ${bedgraph} | grep -v '^#' | sort -k1,1 -k2,2n > temp.bedgraph
+    zcat ${bedgraph} \
+    | cut -f 1,2,3,${col_num} \
+    | grep -v '^#' \
+    | sort -k1,1 -k2,2n \
+    > temp.bedgraph
     
     bedgraphtobigwig \
         --nthreads ${task.cpus} \

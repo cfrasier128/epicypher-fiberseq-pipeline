@@ -36,3 +36,5 @@ clean:
 
 clean-singularity-cache:
 	rm -vf singularity_cache/*.img
+
+# nextflow run main.nf --sample_sheet inputs/sample_sheet.tsv -profile debug,slurm --pb_qc --phase_reads --create_bigwigs
