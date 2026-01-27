@@ -16,17 +16,6 @@ update:
 references:
 	bash ./prepare_references.sh
 
-input_template:
-	mkdir -p inputs
-	cat > inputs/sample_sheet_template.tsv << EOL
-samp_name\tbam_path\tref_name
-Sample1\t/data/Sample1.run1.bam\thg38
-Sample1\t/data/Sample1.run2.bam\thg38
-Sample2\t/data/Sample2.bam\thg38
-EOL
-
-inputs: references input_template
-
 check:
 	nextflow lint main.nf
 	nextflow lint subworkflows/fiberseq-qc.nf
