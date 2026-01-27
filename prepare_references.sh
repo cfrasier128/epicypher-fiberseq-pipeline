@@ -5,10 +5,10 @@ set -euo pipefail
 # https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/README_analysis_sets.txt
 mkdir -p references/hg38
 cd references/hg38 || exit 1
-wget https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/release/references/GRCh38/GRCh38_GIABv3_no_alt_analysis_set_maskedGRC_decoys_MAP2K3_KMT2C_KCNJ18.fasta.gz
-gunzip -c GRCh38_GIABv3_no_alt_analysis_set_maskedGRC_decoys_MAP2K3_KMT2C_KCNJ18.fasta.gz > hg38.fasta
+wget https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz
+gunzip -c GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz > hg38.fasta
 samtools faidx hg38.fasta
-rm GRCh38_GIABv3_no_alt_analysis_set_maskedGRC_decoys_MAP2K3_KMT2C_KCNJ18.fasta.gz
+rm GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz
 cd ../../
 
 # Human T2T-CHM13 v2.0 with rCRS mitochondrial sequence and masked chrY PARs
