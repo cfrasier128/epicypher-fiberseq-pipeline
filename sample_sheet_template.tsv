@@ -1,0 +1,4 @@
+	samp_name	bam_path	ref_name
+	Sample1	/data/Sample1.run1.bam	hg38
+	Sample1	/data/Sample1.run2.bam	hg38
+	Sample2	/data/Sample2.bam	hg38
