@@ -38,7 +38,7 @@ process align_bams {
 
     pbmm2 align \
         --preset HIFI --log-level INFO \
-        --strip \
+        --strip --unmapped \
         --num-threads ${task.cpus} \
         --sort --sort-memory 4G --bam-index BAI \
         --sample ${samp_name} \
