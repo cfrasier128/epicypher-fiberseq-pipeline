@@ -232,8 +232,8 @@ process create_pileups {
 
 process pileupbedgraphtobigwig {
     publishDir "${params.outdir}/pileups/${samp_name}", mode: 'copy'
-    label 'small'
-    container 'cfrasier/epi-fiberseq:latest'
+    label 'medium'
+    container 'quay.io/pacbio/bigtools:3844b58_build1'
 
     input:
     tuple val(samp_name), path(bedgraph), val(ref_name), path(ref_fai), val(feature), val(col_num)
