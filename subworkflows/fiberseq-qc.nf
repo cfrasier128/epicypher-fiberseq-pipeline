@@ -3,7 +3,7 @@ nextflow.enable.dsl = 2
 
 process create_qc_table {
     publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
-    label 'large'
+    label 'medium'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
     input:
@@ -192,7 +192,7 @@ process plot_readlengths {
 
 process plot_msp_resolution {
     publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
-    label 'small'
+    label 'medium'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
     input:
@@ -234,7 +234,7 @@ process plot_read_quality {
 
 process plot_autocorrelation {
     publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
-    label 'small'
+    label 'medium'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
     input:

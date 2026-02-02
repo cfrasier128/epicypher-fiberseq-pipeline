@@ -23,7 +23,7 @@ params.outdir = "${workflow.launchDir}/results"
 include { fiberseq_qc_workflow } from './subworkflows/fiberseq-qc.nf'
 
 process align_bams {
-    label 'very_large'
+    label 'large'
     container 'quay.io/pacbio/pbmm2:1.17.0_build1'
 
     input:
@@ -49,7 +49,7 @@ process align_bams {
 }
 
 process merge_bams {
-    label 'large'
+    label 'medium'
     container 'cfrasier/epi-pacbio:latest'
 
     input:
@@ -208,7 +208,7 @@ process call_msps {
 
 process create_pileups {
     publishDir "${params.outdir}/pileups/${samp_name}", mode: 'copy'
-    label 'medium'
+    label 'small'
     container 'cfrasier/epi-fiberseq:latest'
 
     input:
@@ -250,11 +250,12 @@ process pileupbedgraphtobigwig {
     | sort -k1,1 -k2,2n \
     > temp.bedgraph
     
-    bedgraphtobigwig \
-        --nthreads ${task.cpus} \
-        temp.bedgraph \
-        chromsizes \
-        ${samp_name}.${feature}.bw
+    bedGraphToBigWig temp.bedgraph chromsizes ${samp_name}.${feature}.bw
+    #bedgraphtobigwig \
+    #    --nthreads ${task.cpus} \
+    #    temp.bedgraph \
+    #    chromsizes \
+    #    ${samp_name}.${feature}.bw
     """
 }
 
