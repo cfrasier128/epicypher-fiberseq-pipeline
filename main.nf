@@ -232,7 +232,7 @@ process create_pileups {
 
 process pileupbedgraphtobigwig {
     publishDir "${params.outdir}/pileups/${samp_name}", mode: 'copy'
-    label 'large'
+    label 'medium'
     container 'quay.io/pacbio/bigtools:3844b58_build1'
 
     input:
