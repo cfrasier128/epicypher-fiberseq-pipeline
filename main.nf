@@ -250,12 +250,11 @@ process pileupbedgraphtobigwig {
     | sort -k1,1 -k2,2n \
     > temp.bedgraph
     
-    bedGraphToBigWig temp.bedgraph chromsizes ${samp_name}.${feature}.bw
-    #bedgraphtobigwig \
-    #    --nthreads ${task.cpus} \
-    #    temp.bedgraph \
-    #    chromsizes \
-    #    ${samp_name}.${feature}.bw
+    bedgraphtobigwig \
+        --nthreads ${task.cpus} \
+        temp.bedgraph \
+        chromsizes \
+        ${samp_name}.${feature}.bw
     """
 }
 
