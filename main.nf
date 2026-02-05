@@ -3,7 +3,7 @@ nextflow.enable.dsl = 2
 
 // inputs
 params.sample_sheet = ''
-params.ref_path = "${workflow.launchDir}/references"
+params.ref_sheet_path = ''
 
 // default parameters
 params.ref_name = 't2t'
@@ -250,12 +250,11 @@ process pileupbedgraphtobigwig {
     | sort -k1,1 -k2,2n \
     > temp.bedgraph
     
-    bedGraphToBigWig temp.bedgraph chromsizes ${samp_name}.${feature}.bw
-    #bedgraphtobigwig \
-    #    --nthreads ${task.cpus} \
-    #    temp.bedgraph \
-    #    chromsizes \
-    #    ${samp_name}.${feature}.bw
+    bedgraphtobigwig \
+        --nthreads ${task.cpus} \
+        temp.bedgraph \
+        chromsizes \
+        ${samp_name}.${feature}.bw
     """
 }
 
@@ -263,41 +262,17 @@ process pileupbedgraphtobigwig {
 
 workflow {
 
-    references_ch = channel.of(
-            [
-                "${params.ref_path}/chm13/chm13.fasta",
-                "${params.ref_path}/chm13/chm13.fasta.fai",
-                "chm13",
-            ]
-        )
-        .concat(
-            channel.of(
-                [
-                    "${params.ref_path}/hg38/hg38.fasta",
-                    "${params.ref_path}/hg38/hg38.fasta.fai",
-                    "hg38",
-                ]
-            )
-        )
-        .concat(
-            channel.of(
-                [
-                    "${params.ref_path}/mm39/mm39.fasta",
-                    "${params.ref_path}/mm39/mm39.fasta.fai",
-                    "mm39",
-                ]
-            )
-        )
-        .concat(
-            channel.of(
-                [
-                    "${params.ref_path}/mm10/mm10.fasta",
-                    "${params.ref_path}/mm10/mm10.fasta.fai",
-                    "mm10",
-                ]
-            )
-        )
-    // -> ref_fasta, ref_fai, ref_name
+    //read in reference sheet, fail if not specified
+    // sample sheet columns: ref_name, ref_fasta, ref_fai
+    if (!params.ref_sheet_path) {
+        error("--ref_sheet_path must be specified")
+    }
+
+    // references_ch layout (post map) -> ref_fasta, ref_fai, ref_name
+    references_ch = channel.fromPath("${params.ref_sheet_path}")
+        .splitCsv(skip: 1, sep: '\t')
+        .map { row -> tuple(row[1], row[2], row[0]) }
+
     if (params.debug) {
         references_ch.view { v -> "Available reference genome: ${v[2]}" }
     }
