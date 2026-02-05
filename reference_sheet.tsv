@@ -1,4 +1,0 @@
-ref_name	fasta	fasta_index
-chm13	/media/genomics/18Tb_1/pipelines/nextflow/fiberseq_dev/epicypher-fiberseq-pipeline/references/chm13/chm13.fasta	/media/genomics/18Tb_1/pipelines/nextflow/fiberseq_dev/epicypher-fiberseq-pipeline/references/chm13/chm13.fasta.fai
-hg38	/media/genomics/18Tb_1/pipelines/nextflow/fiberseq_dev/epicypher-fiberseq-pipeline/references/hg38/hg38.fasta	/media/genomics/18Tb_1/pipelines/nextflow/fiberseq_dev/epicypher-fiberseq-pipeline/references/hg38/hg38.fasta.fai
-mm39	/media/genomics/18Tb_1/pipelines/nextflow/fiberseq_dev/epicypher-fiberseq-pipeline/references/mm39/mm39.fasta	/media/genomics/18Tb_1/pipelines/nextflow/fiberseq_dev/epicypher-fiberseq-pipeline/references/mm39/mm39.fasta.fai
