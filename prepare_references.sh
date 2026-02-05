@@ -141,5 +141,15 @@ if [[ -z "$REF" || -z "$DEST" ]]; then
 	exit 1
 fi
 
+# Check if ref already exists in sheet
+if [[ -f "$SHEET" ]] && grep -P "^$REF\t" "$SHEET"; then
+	echo "Warning: $REF already exists in $SHEET" >&2
+	echo "Skipping download and preparation."
+	exit 0
+else
+	echo "Preparing reference $REF..."
+fi
+
 download_and_prepare "$REF" "$DEST" "$SHEET"
+
 
