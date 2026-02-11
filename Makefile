@@ -5,6 +5,9 @@ export PATH:=$(CURDIR):$(PATH)
 export SINGULARITY_CACHEDIR:=$(CURDIR)/singularity_cache
 export NXF_SINGULARITY_CACHEDIR:=$(SINGULARITY_CACHEDIR)
 
+REFDIR ?= $(CURDIR)/references
+REFSHEET ?= $(CURDIR)/inputs/reference_sheet.tsv
+
 install: ./nextflow
 
 ./nextflow:
@@ -14,7 +17,13 @@ update:
 	nextflow self-update
 
 references:
-	bash ./prepare_references.sh
+	bash ./prepare_references.sh \
+	--ref $(ref) \
+	--dest $(REFDIR) \
+	--sheet $(REFSHEET)
+
+sample_sheet_template:
+	echo "samp_name	bam_path	ref_name" > inputs/sample_sheet_template.tsv
 
 check:
 	nextflow lint main.nf
@@ -37,4 +46,4 @@ clean:
 clean-singularity-cache:
 	rm -vf singularity_cache/*.img
 
-# nextflow run main.nf --sample_sheet inputs/sample_sheet.tsv -profile debug,slurm --pb_qc --phase_reads --create_bigwigs
+# nextflow run main.nf --sample_sheet inputs/sample_sheet.tsv --ref_sheet_path inputs/reference_sheet.tsv -profile debug,slurm --pb_qc --phase_reads --create_bigwigs
