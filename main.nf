@@ -6,8 +6,7 @@ params.sample_sheet = ''
 params.ref_sheet_path = ''
 
 // default parameters
-params.ref_name = 't2t'
-params.confidence_ml_val = '250'
+params.confidence_ml_val = '125'
 params.minimum_msp_dist = '10'
 
 // optional steps
@@ -15,12 +14,14 @@ params.pb_qc = false
 params.phase_reads = false
 params.create_bigwigs = false
 params.debug = false
+params.peak_call = false
 
 // output directory
 params.outdir = "${workflow.launchDir}/results"
 
 // Grab subworkflows
 include { fiberseq_qc_workflow } from './subworkflows/fiberseq-qc.nf'
+include { call_fire_peaks } from './subworkflows/FIRE_peakcalling.nf'
 
 process align_bams {
     label 'large'
@@ -69,7 +70,7 @@ process merge_bams {
 }
 
 process pacbio_qc {
-    publishDir "${params.outdir}/sequencing_qc/${samp_name}", mode: 'copy'
+    publishDir "${params.outdir}/5_sequencing_qc/${samp_name}", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-pacbio:latest'
 
@@ -158,7 +159,7 @@ process sawfish {
 }
 
 process hiphase {
-    publishDir "${params.outdir}/phased_output/${samp_name}", mode: 'copy'
+    publishDir "${params.outdir}/3_phased_output/${samp_name}", mode: 'copy'
     label 'large'
     container 'quay.io/pacbio/hiphase:1.5.0_build1'
 
@@ -186,7 +187,7 @@ process hiphase {
 }
 
 process call_msps {
-    publishDir "${params.outdir}/fire_bams/${samp_name}", mode: 'copy'
+    publishDir "${params.outdir}/1_fire_bams/${samp_name}", mode: 'copy'
     label 'large'
     container 'cfrasier/epi-fiberseq:latest'
 
@@ -207,7 +208,7 @@ process call_msps {
 }
 
 process create_pileups {
-    publishDir "${params.outdir}/pileups/${samp_name}", mode: 'copy'
+    publishDir "${params.outdir}/4_pileups/${samp_name}", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq:latest'
 
@@ -231,7 +232,7 @@ process create_pileups {
 }
 
 process pileupbedgraphtobigwig {
-    publishDir "${params.outdir}/pileups/${samp_name}", mode: 'copy'
+    publishDir "${params.outdir}/4_pileups/${samp_name}", mode: 'copy'
     label 'medium'
     container 'quay.io/pacbio/bigtools:3844b58_build1'
 
@@ -354,6 +355,10 @@ workflow {
     // run stergachis fiberseq qc on bams that have been run through add-nucleosomes
     fiberseq_qc_workflow(call_msps.out.msp_bams)
     // -> samp_name, qc_files, ref_name
+
+    if (params.peak_call){
+        call_fire_peaks(call_msps.out.msp_bams,references_ch)
+    }
 
     if (params.create_bigwigs) {
         // If --create_bigwigs is set in command line, create pileups and bigwigs

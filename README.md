@@ -1,63 +1,174 @@
-# epicypher-fiberseq-pipeline
+# Fiber-seq Nextflow Pipeline
 
-Download the files and place them in a directory. It will contain the nextflow script (Fiberseq_docker_pipeline.nf) as well as the dockerfiles needed to create some of the docker images. After unzipping the file, move into the folder and run (you may need to use sudo as well):
+<h3>Summary</h3>
 
-Setting up the input directories
-To set up the input directory for Fiber-seq in a pipeline compatible format, use the above script. It softlink and name the files according to the Run Design. You must also download the Run Design from SMRT Link. To download the Run Design, follow the steps under "Downloading the Run Design". 
-If running the setup script for the first time, it will prompt you to establish a default raw data directory (i.e. where the data transfer scheme points to or where the raw data currently is) as well as an project analysis directory (i.e. where all the analysis should occur)
-python3 prepFiberDir.py -r $RUN_NAME -d $RUN_DESIGN
-Creating an input samplesheet
-One of the required inputs is a samplesheet. The format must match that of the example below:
+- Purpose: This is a Nextflow based analysis pipeline focused on analyzing Fiber-seq data from a PacBio sequencing instrument. This pipeline will carry unaligned bams through alignment, merging, fibertools, and fiberseq-qc. Optionally, FIRE peak calling, haplotype phasing, and bigwig creation are supported. 
+- Entry point: `main.nf` (DSL2 workflow).
+- Convenience: `Makefile` provides install/lint/format/clean and
+  reference-prep helpers.
 
-The first three columns can be directly copied and pasted from the run design (details on where to find that are below in the section "Downloading the Run Design"). The "Merge Sample Name" column is used to specify both which samples to merge and what to name the new merged sample. Any samples that should not be merged should be left blank. The samplesheet must be saved as a tab-separated file (.tsv).
-Kicking off the Pipeline
+---
 
-Required parameters
---input_bam_path         : Path to the folder of the bams you would like to run the pipeline
---sample_sheet           : Path to samplesheet created from run design (must be tsv)
- 
-Optional Parameters
---outdir                 : Path that you would like the outputs to be written to (default:
-                           "./fiberseq_output"
---reference_genome       : Reference genome to use for all samples (default: hg38, 
-                           options: hg38, T2T, mm10)
---confidence_ml_val      : The confidence threshold of the methylation caller (default: 250)
---minimum_msp_dist       : The minimum distance of MSP calls to keep (default: 10)
+<h3>Requirements</h3>
 
-# Optional Process Parameters
---pb_qc                  : Specify to run the PacBio QC script (default: False)
---phase_bams             : Run the variant calling and read phasing steps (default: False)
---create_bigwigs         : Run the pileup and bigwig creation steps (default: False)
+- Nextflow (the `Makefile` can download a pinned version). It is also possible to install via Conda.
+- Containers:
+  - `-profile local` uses Docker.
+  - `-profile slurm` uses Singularity/Apptainer. (Can also be used to support Docker)
+- `samtools` is required by the reference prep script.
 
-# Nextflow specific parameters
--with-report             : Generate workflow report for pipeline. Shows resource usage.
--with-timeline           : Generate pipeline timeline report
--resume                  : Extremely useful. If pipeline fails, starts it up again where it         a                          left off
+---
 
- 
-Example commands:
-# The simplest way to run the pipeline. Uses hg38 reference. Will put outputs in current directory in folder "fiberseq_output". This will also not run the optional PacBio QC step.
+<h3>Inputs</h3>
 
-nextflow run /path/to/Fiberseq_docker_pipeline.nf --input_bam_path /path/to/bam_directory/
-
-# The recommended way to run the pipeline. Generates all the necessary reports and uses only the most useful parameters
-
-nextflow run /path/to/Fiberseq_docker_pipeline.nf --input_bam_path /path/to/bam_directory/ --outdir /path/to/output_dir/ --reference_genome T2T -with-report -with-timeline --pb_qc
-
-Downloading the Run Design
-1.) Navigate to the "Runs" module on SMRT Link
+<h4>Required</h4>
+- `--sample_sheet`: TSV with header and columns:
+  `samp_name <TAB> bam_path <TAB> ref_name`.
+  - Multiple rows can share the same `samp_name` (those BAMs will be aligned individually then merged, useful for technical sequencing replicates).\
 
 
-2.) Select the sequencing run you would like to analyze by clicking the blue name under "Run Name":
+- `--ref_sheet_path`: TSV with header and columns: `ref_name <TAB> fasta_path <TAB> fasta_index`.
+  - Can be created using `prepare_references.sh`
+  - The `ref_name` values must match between the sample sheet and reference sheet.
 
 
-3.) Select "View Run Design" in the top right corner of the window:
+Example: `inputs/sample_sheet.tsv`
 
+```bash
+samp_name\tbam_path\tref_name
+sampleA\tinputs/bams/a1/sampleA.bam\thg38
+sampleA\tinputs/bams/a2/sampleA.bam\thg38
+sampleB\tinputs/bams/b1/sampleB.bam\tchm13
+```
 
-4.) Click the "Export Run Design" button to download the run design to your default browser location:
+Example `inputs/reference_sheet.tsv`:
 
+```bash
+ref_name\tref_fasta\tref_index
+hg38\t/refs/hg38/hg38.fasta\t/refs/hg38/hg38.fasta.fai
+chm13\t/refs/chm13/chm13.fasta\t/refs/chm13/chm13.fasta.fai
+```
 
+<h4>Optional Parameters</h4>
 
-Summarizing the QC
-After running the pipeline, run the command below to create a summary QC table that includes the commonly reported statistics. If you would like more statistics added to the table, reach out to Connor. This script will use the same configuration that was created during the "Setting up the input directories" step.
-python3 collectPBMetrics.py -r $RUN_NAME
+- `--outdir` (default `${workflow.launchDir}/results`) — top-level output
+  directory.
+- `--confidence_ml_val` (default `250`) — ML threshold to use for both 6mA and 5mC for `ft add-nucleosomes`
+  and pileups.
+- `--minimum_msp_dist` (default `10`) — MSP length filter used for pileups
+  (`ftx "len(msp) > ..."`).
+
+<h4>Optional steps</h4>
+
+- `--pb_qc` (default `false`) — generate PacBio QC reports.
+- `--phase_reads` (default `false`) — run `deepvariant` + `sawfish` then
+  `hiphase` haplotagging.
+- `--create_bigwigs` (default `false`) — create pileup TSVs and BigWigs.
+- `--debug` (default `false`) — prints helpful channel `view()` messages.
+
+---
+
+<h3>Makefile shortcuts</h3>
+
+- Install Nextflow locally into the repo:
+
+```bash
+make install
+```
+
+- Create a blank sample sheet template:
+
+```bash
+make sample_sheet_template
+```
+
+- Prepare a reference FASTA + index and append to a reference sheet:
+
+```bash
+make references ref=hg38
+make references ref=chm13
+```
+
+This writes FASTA files under `references/<ref>/` and creates/appends to
+`inputs/reference_sheet.tsv` (configurable via `REFDIR` and `REFSHEET` in the Makefile).
+
+- Lint / auto-format the Nextflow scripts:
+
+```bash
+make check
+make format
+```
+
+---
+
+<h3>High-level workflow steps</h3>
+
+Short descriptions of each Nextflow job step:
+- Read the sample sheet and the reference sheet and join by `ref_name`.
+- `align_bams`: align each input BAM with `pbmm2 align` (HiFi preset).
+- `merge_bams`: group by `samp_name` from first column of sample sheet and merge aligned BAMs into (then index with `samtools index`).
+- If using `--pb_qc`: creates sample level sequencing QC reports.
+- If using `--phase_reads`:
+  - `deepvariant` produces short nucleotide polymorphism (SNP/SNV) calls.
+  - `sawfish` produces structural variant (SV) calls.
+  - `hiphase` uses both variant calls (SNP and SV) to haplotype phase reads.
+- `call_msps`: Paint bams with MSP and nucleosome calls.
+- `fiberseq_qc_workflow`: runs Stergachis-style fiberseq QC.
+- If using `--create_bigwigs`: creates methylation (6mA/5mC) and nucleosome pileups and converts them to BigWigs.
+
+---
+
+<h3>Published output locations</h3>
+
+- `${outdir}/1_fire_bams/<sample>/` — Fibertools labelled bam and index.
+- `${outdir}/2_fiberseq-qc/<sample>/` — Fiber-seq QC tables + PDFs.
+- `${outdir}/3_phased_output/<sample>/` — haplotagged BAM + phased VCFs (only if `--phase_reads`).
+- `${outdir}/4_pileups/<sample>/` — Pileups and bigwigs tracks (only if `--create_bigwigs`).
+- `${outdir}/5_sequencing_qc/<sample>/` — Per sample PacBio QC PDFs/plots (only if `--pb_qc`).
+
+---
+
+<h3>Example runs</h3>
+
+Local run (Docker), align + MSP/QC (minimum required parameters)
+
+```bash
+nextflow run main.nf \
+  --sample_sheet inputs/sample_sheet.tsv \
+  --ref_sheet_path inputs/reference_sheet.tsv \
+  -profile local
+```
+
+Local run with phasing + bigwigs
+
+```bash
+nextflow run main.nf \
+  --sample_sheet inputs/sample_sheet.tsv \
+  --ref_sheet_path inputs/reference_sheet.tsv \
+  --pb_qc true \
+  --phase_reads true \
+  --create_bigwigs true \
+  --outdir results/full_run \
+  -profile local
+```
+
+SLURM run (Singularity)
+
+```bash
+nextflow run main.nf \
+  --sample_sheet inputs/sample_sheet.tsv \
+  --ref_sheet_path inputs/reference_sheet.tsv \
+  -profile slurm
+```
+
+---
+
+Tips
+
+- Use absolute paths in `inputs/reference_sheet.tsv` (the
+  `prepare_references.sh`
+  script writes canonical paths for this reason).
+- If you enable `-profile debug`, Nextflow will emit
+  trace/timeline/report/dag files; use `--debug true` if you also want the
+  channel `view()` messages.
+
