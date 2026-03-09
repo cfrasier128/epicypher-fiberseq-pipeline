@@ -22,6 +22,7 @@
 <h3>Inputs</h3>
 
 <h4>Required</h4>
+
 - `--sample_sheet`: TSV with header and columns:
   `samp_name <TAB> bam_path <TAB> ref_name`.
   - Multiple rows can share the same `samp_name` (those BAMs will be aligned individually then merged, useful for technical sequencing replicates).\
@@ -35,10 +36,10 @@
 Example: `inputs/sample_sheet.tsv`
 
 ```bash
-samp_name\tbam_path\tref_name
-sampleA\tinputs/bams/a1/sampleA.bam\thg38
-sampleA\tinputs/bams/a2/sampleA.bam\thg38
-sampleB\tinputs/bams/b1/sampleB.bam\tchm13
+samp_name	bam_path	ref_name
+sampleA	inputs/bams/a1/sampleA.bam	hg38
+sampleA	inputs/bams/a2/sampleA.bam	hg38
+sampleB	inputs/bams/b1/sampleB.bam	chm13
 ```
 
 Example `inputs/reference_sheet.tsv`:
@@ -125,8 +126,10 @@ Short descriptions of each Nextflow job step:
 - `${outdir}/3_phased_output/<sample>/` — haplotagged BAM + phased VCFs (only if `--phase_reads`).
 - `${outdir}/4_pileups/<sample>/` — Pileups and bigwigs tracks (only if `--create_bigwigs`).
 - `${outdir}/5_sequencing_qc/<sample>/` — Per sample PacBio QC PDFs/plots (only if `--pb_qc`).
+- `${outdir}/6_FIRE_peaks/<sample>/` — Per sample PacBio QC PDFs/plots (only if `--peak_call`).
 
 ---
+
 
 <h3>Example runs</h3>
 
