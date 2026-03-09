@@ -35,20 +35,20 @@
 
 Example: `inputs/sample_sheet.tsv`
 
-```bash
-samp_name	bam_path	ref_name
-sampleA	inputs/bams/a1/sampleA.bam	hg38
-sampleA	inputs/bams/a2/sampleA.bam	hg38
-sampleB	inputs/bams/b1/sampleB.bam	chm13
-```
+| samp_name | bam_path | ref_name |
+|-----------|----------|----------|
+| sampleA | inputs/bams/a1/sampleA.bam | hg38 |
+| sampleA | inputs/bams/a2/sampleA.bam | hg38 |
+| sampleB | inputs/bams/b1/sampleB.bam | chm13 |
+
 
 Example `inputs/reference_sheet.tsv`:
 
-```bash
-ref_name\tref_fasta\tref_index
-hg38\t/refs/hg38/hg38.fasta\t/refs/hg38/hg38.fasta.fai
-chm13\t/refs/chm13/chm13.fasta\t/refs/chm13/chm13.fasta.fai
-```
+| ref_name | ref_fasta | ref_index |
+|----------|-----------|-----------|
+| hg38 | /refs/hg38/hg38.fasta | /refs/hg38/hg38.fasta.fai |
+| chm13 | /refs/chm13/chm13.fasta | /refs/chm13/chm13.fasta.fai |
+
 
 <h4>Optional Parameters</h4>
 
