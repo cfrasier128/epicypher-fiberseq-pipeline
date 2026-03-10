@@ -32,6 +32,11 @@
   - Can be created using `prepare_references.sh`
   - The `ref_name` values must match between the sample sheet and reference sheet.
 
+- `-profile`: Nextflow explicit parameter, determines method for job execution. Use one of the following:
+  - local: executes job using local resources and Docker as container method
+  - aws_env: executes job using Amazon Web Service Batch compute environment
+  - slurm: executes job locally using slurm as job scheduler. Singularity or Docker can be used as container method.
+
 
 Example: `inputs/sample_sheet.tsv`
 
