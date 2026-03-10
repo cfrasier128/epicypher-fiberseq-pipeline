@@ -1,4 +1,8 @@
 # Fiber-seq Nextflow Pipeline
+<h3>Disclaimer</h3>
+While this repository is maintained by EpiCypher, Inc., we make no promises to troubleshoot or offer technical support. Please report any bugs encountered, however we make no promises to fix them.
+
+---
 
 <h3>Summary</h3>
 
