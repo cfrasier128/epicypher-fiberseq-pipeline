@@ -6,7 +6,6 @@ params.sample_sheet = ''
 params.ref_sheet_path = ''
 
 // default parameters
-params.confidence_ml_val = '125'
 params.minimum_msp_dist = '10'
 
 // optional steps
@@ -208,8 +207,7 @@ process call_msps {
 }
 
 process create_pileups {
-    publishDir "${params.outdir}/4_pileups/${samp_name}", mode: 'copy'
-    label 'small'
+    label 'large'
     container 'cfrasier/epi-fiberseq:latest'
 
     input:
@@ -356,8 +354,8 @@ workflow {
     fiberseq_qc_workflow(call_msps.out.msp_bams)
     // -> samp_name, qc_files, ref_name
 
-    if (params.peak_call){
-        call_fire_peaks(call_msps.out.msp_bams,references_ch)
+    if (params.peak_call) {
+        call_fire_peaks(call_msps.out.msp_bams, references_ch)
     }
 
     if (params.create_bigwigs) {
