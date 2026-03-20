@@ -200,7 +200,7 @@ process call_msps {
     script:
     """
     conda run -n fiberseq-qc ft add-nucleosomes \
-        --threads ${task.cpus} --ml ${params.confidence_ml_val} \
+        --threads ${task.cpus} \
         -v \
         ${aligned_bam} ${samp_name}.${ref_name}.6ma.nucs.bam;
     samtools index -@ ${task.cpus - 1} ${samp_name}.${ref_name}.6ma.nucs.bam;
@@ -221,7 +221,7 @@ process create_pileups {
     script:
     """
     ft pileup \
-        --m6a --ml ${params.confidence_ml_val} \
+        --m6a \
         --cpg \
         -t ${task.cpus} \
         --ftx "len(msp)>${params.minimum_msp_dist}" \
