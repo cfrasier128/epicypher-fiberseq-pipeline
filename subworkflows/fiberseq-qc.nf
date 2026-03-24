@@ -2,8 +2,8 @@
 nextflow.enable.dsl = 2
 
 process create_qc_table {
-    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
-    label 'medium'
+    publishDir "${params.outdir}/2_fiberseq-qc/${sample_id}/", mode: 'copy'
+    label 'large'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
     input:
@@ -16,15 +16,15 @@ process create_qc_table {
 
     script:
     """
-    tech=\$(samtools view -H ${bam_file} \
+    tech=`samtools view -H ${bam_file} \
         | grep -e "PL:" \
         | awk 'NR == 1' \
         | tr '\t' '\n' \
         | awk '\$1 ~ /^PL:/' \
         | cut -f2 -d':' \
         | tr '[[:upper:]]' '[[:lower:]]' \
-        || true)
-    nreads=\$(samtools view -c ${bam_file})
+        || true`
+    nreads=`samtools view -c ${bam_file}`
     export tech
     export nreads
     ft extract -t 8 ${bam_file} --all - \
@@ -34,7 +34,7 @@ process create_qc_table {
 }
 
 process plot_msp_lengths {
-    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
+    publishDir "${params.outdir}/2_fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -55,7 +55,7 @@ process plot_msp_lengths {
 }
 
 process plot_nuc_lengths {
-    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
+    publishDir "${params.outdir}/2_fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -76,7 +76,7 @@ process plot_nuc_lengths {
 }
 
 process plot_6ma {
-    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
+    publishDir "${params.outdir}/2_fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -99,7 +99,7 @@ process plot_6ma {
 }
 
 process plot_nucs_per_read {
-    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
+    publishDir "${params.outdir}/2_fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -120,7 +120,7 @@ process plot_nucs_per_read {
 }
 
 process plot_5mCs_per_read {
-    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
+    publishDir "${params.outdir}/2_fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -141,7 +141,7 @@ process plot_5mCs_per_read {
 }
 
 process plot_readlength_per_nuc {
-    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
+    publishDir "${params.outdir}/2_fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -162,7 +162,7 @@ process plot_readlength_per_nuc {
 }
 
 process plot_readlengths {
-    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
+    publishDir "${params.outdir}/2_fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -175,24 +175,17 @@ process plot_readlengths {
 
     script:
     """
-    #if [[ "\${tech}" == "pacbio" ]]; then
-    #    export max_scale=25000
-    #fi
-    #if [[ "\${tech}" == "ont" ]]; then
-        export max_scale=50000
-    #fi
     /opt/fiberseq/details/make-plot-readlengths.sh \
         ${sample_id} \
-        ${qc_table} \
-        \${max_scale} \
+        ${qc_table} 50000 \
         ${sample_id}.readlengths.pdf \
         ${sample_id}.readlengths.intermediate.stat.txt
     """
 }
 
 process plot_msp_resolution {
-    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
-    label 'medium'
+    publishDir "${params.outdir}/2_fiberseq-qc/${sample_id}/", mode: 'copy'
+    label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
     input:
@@ -212,7 +205,7 @@ process plot_msp_resolution {
 }
 
 process plot_read_quality {
-    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
+    publishDir "${params.outdir}/2_fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -233,8 +226,8 @@ process plot_read_quality {
 }
 
 process plot_autocorrelation {
-    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
-    label 'medium'
+    publishDir "${params.outdir}/2_fiberseq-qc/${sample_id}/", mode: 'copy'
+    label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
     input:
@@ -250,13 +243,12 @@ process plot_autocorrelation {
         ${sample_id} \
         ${bam_file} \
         ${sample_id}.autocorrelation.pdf \
-        ${sample_id}.autocorrelation.intermediate.stat.txt \
-        \$tech
+        ${sample_id}.autocorrelation.intermediate.stat.txt \$tech
     """
 }
 
 process plot_randfibers {
-    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
+    publishDir "${params.outdir}/2_fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -271,14 +263,15 @@ process plot_randfibers {
     /opt/fiberseq/details/make-plot-rand-fibers.sh \
         ${sample_id} \
         ${bam_file} \
-        0 20000 \
+        0 \
+        20000 \
         ${sample_id}.randfibers.pdf \
         ${sample_id}.randfibers.intermediate.stat.txt
     """
 }
 
 process plot_zoomed_randfibers {
-    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
+    publishDir "${params.outdir}/2_fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
@@ -293,19 +286,31 @@ process plot_zoomed_randfibers {
     /opt/fiberseq/details/make-plot-rand-fibers.sh \
         ${sample_id} \
         ${bam_file} \
-        2000 4000 \
+        2000 \
+        4000 \
         ${sample_id}.randfibers.2K-4K.pdf \
         ${sample_id}.randfibers.2K-4K.intermediate.stat.txt
     """
 }
 
 process join_qc {
-    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
+    publishDir "${params.outdir}/2_fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
     input:
-    tuple val(sample_id), path(msp_pdf), path(msp_txt), path(nuc_pdf), path(nuc_txt), path(ma_pdf), path(ma_txt), path(nucs_per_read_pdf), path(nucs_per_read_txt), path(cpgs_per_read_pdf), path(cpgs_per_read_txt), path(readlength_per_nuc_pdf), path(readlength_per_nuc_txt), path(readlengths_pdf), path(readlengths_txt), path(msp_resolution_pdf), path(msp_resolution_txt), path(autocorrelation_pdf), path(autocorrelation_txt), path(randfibers_pdf), path(randfibers_txt), path(zoomed_randfibers_pdf), path(zoomed_randfibers_txt)
+    tuple val(sample_id), path(msp_pdf), \
+    path(msp_txt), path(nuc_pdf), \
+    path(nuc_txt), path(ma_pdf), \
+    path(ma_txt), path(nucs_per_read_pdf), \
+    path(nucs_per_read_txt), path(cpgs_per_read_pdf), \
+    path(cpgs_per_read_txt), path(readlength_per_nuc_pdf), \
+    path(readlength_per_nuc_txt), path(readlengths_pdf), \
+    path(readlengths_txt), path(msp_resolution_pdf), \
+    path(msp_resolution_txt), path(autocorrelation_pdf), \
+    path(autocorrelation_txt), path(randfibers_pdf), \
+    path(randfibers_txt), path(zoomed_randfibers_pdf), 
+    path(zoomed_randfibers_txt)
     env "nreads"
 
     output:
@@ -321,12 +326,23 @@ process join_qc {
 }
 
 process make_html {
-    publishDir "${params.outdir}/fiberseq-qc/${sample_id}/", mode: 'copy'
+    publishDir "${params.outdir}/2_fiberseq-qc/${sample_id}/", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-fiberseq-qc:latest'
 
     input:
-    tuple val(sample_id), path(msp_pdf), path(msp_txt), path(nuc_pdf), path(nuc_txt), path(ma_pdf), path(ma_txt), path(nucs_per_read_pdf), path(nucs_per_read_txt), path(cpgs_per_read_pdf), path(cpgs_per_read_txt), path(readlength_per_nuc_pdf), path(readlength_per_nuc_txt), path(readlengths_pdf), path(readlengths_txt), path(msp_resolution_pdf), path(msp_resolution_txt), path(autocorrelation_pdf), path(autocorrelation_txt), path(randfibers_pdf), path(randfibers_txt), path(zoomed_randfibers_pdf), path(zoomed_randfibers_txt)
+    tuple val(sample_id), path(msp_pdf), \
+    path(msp_txt), path(nuc_pdf), \
+    path(nuc_txt), path(ma_pdf), \
+    path(ma_txt), path(nucs_per_read_pdf), \
+    path(nucs_per_read_txt), path(cpgs_per_read_pdf), \
+    path(cpgs_per_read_txt), path(readlength_per_nuc_pdf), \
+    path(readlength_per_nuc_txt), path(readlengths_pdf), \
+    path(readlengths_txt), path(msp_resolution_pdf), \
+    path(msp_resolution_txt), path(autocorrelation_pdf), \
+    path(autocorrelation_txt), path(randfibers_pdf), \
+    path(randfibers_txt), path(zoomed_randfibers_pdf), \
+    path(zoomed_randfibers_txt)
     env "nreads"
 
     output:
@@ -337,10 +353,10 @@ process make_html {
     script:
     """
     /opt/fiberseq/details/make-html.tcsh \
-        ${sample_id} \
-        \$nreads \
-        ${sample_id}.overview.html \
-        ${sample_id}.qc.html \
+    ${sample_id} \
+    \$nreads \
+    ${sample_id}.overview.html \
+    ${sample_id}.qc.html \
     
     """
 }

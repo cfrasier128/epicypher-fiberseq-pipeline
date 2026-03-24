@@ -5,24 +5,33 @@ export PATH:=$(CURDIR):$(PATH)
 export SINGULARITY_CACHEDIR:=$(CURDIR)/singularity_cache
 export NXF_SINGULARITY_CACHEDIR:=$(SINGULARITY_CACHEDIR)
 
+REFDIR ?= $(CURDIR)/references
+REFSHEET ?= $(CURDIR)/inputs/reference_sheet.tsv
+
 install: ./nextflow
 
 ./nextflow:
 	curl -fsSL get.nextflow.io | bash
 
 update:
-	nextflow self-update
+	./nextflow self-update
 
 references:
-	bash ./prepare_references.sh
+	bash ./prepare_references.sh \
+	--ref $(ref) \
+	--dest $(REFDIR) \
+	--sheet $(REFSHEET)
+
+sample_sheet_template:
+	echo "samp_name	bam_path	ref_name" > inputs/sample_sheet_template.tsv
 
 check:
-	nextflow lint main.nf
-	nextflow lint subworkflows/fiberseq-qc.nf
+	./nextflow lint main.nf
+	./nextflow lint subworkflows/fiberseq-qc.nf
 
 format:
-	nextflow lint -format main.nf
-	nextflow lint -format subworkflows/fiberseq-qc.nf
+	./nextflow lint -format main.nf
+	./nextflow lint -format subworkflows/fiberseq-qc.nf
 
 clean:
 	rm -vf .nextflow.log*

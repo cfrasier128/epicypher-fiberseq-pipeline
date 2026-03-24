@@ -6,8 +6,6 @@ params.sample_sheet = ''
 params.ref_sheet_path = ''
 
 // default parameters
-params.ref_name = 't2t'
-params.confidence_ml_val = '250'
 params.minimum_msp_dist = '10'
 
 // optional steps
@@ -15,12 +13,14 @@ params.pb_qc = false
 params.phase_reads = false
 params.create_bigwigs = false
 params.debug = false
+params.peak_call = false
 
 // output directory
 params.outdir = "${workflow.launchDir}/results"
 
 // Grab subworkflows
 include { fiberseq_qc_workflow } from './subworkflows/fiberseq-qc.nf'
+include { call_fire_peaks } from './subworkflows/FIRE_peakcalling.nf'
 
 process align_bams {
     label 'large'
@@ -69,7 +69,7 @@ process merge_bams {
 }
 
 process pacbio_qc {
-    publishDir "${params.outdir}/sequencing_qc/${samp_name}", mode: 'copy'
+    publishDir "${params.outdir}/5_sequencing_qc/${samp_name}", mode: 'copy'
     label 'small'
     container 'cfrasier/epi-pacbio:latest'
 
@@ -158,7 +158,7 @@ process sawfish {
 }
 
 process hiphase {
-    publishDir "${params.outdir}/phased_output/${samp_name}", mode: 'copy'
+    publishDir "${params.outdir}/3_phased_output/${samp_name}", mode: 'copy'
     label 'large'
     container 'quay.io/pacbio/hiphase:1.5.0_build1'
 
@@ -186,7 +186,7 @@ process hiphase {
 }
 
 process call_msps {
-    publishDir "${params.outdir}/fire_bams/${samp_name}", mode: 'copy'
+    publishDir "${params.outdir}/1_fire_bams/${samp_name}", mode: 'copy'
     label 'large'
     container 'cfrasier/epi-fiberseq:latest'
 
@@ -199,7 +199,7 @@ process call_msps {
     script:
     """
     conda run -n fiberseq-qc ft add-nucleosomes \
-        --threads ${task.cpus} --ml ${params.confidence_ml_val} \
+        --threads ${task.cpus} \
         -v \
         ${aligned_bam} ${samp_name}.${ref_name}.6ma.nucs.bam;
     samtools index -@ ${task.cpus - 1} ${samp_name}.${ref_name}.6ma.nucs.bam;
@@ -207,8 +207,7 @@ process call_msps {
 }
 
 process create_pileups {
-    publishDir "${params.outdir}/pileups/${samp_name}", mode: 'copy'
-    label 'small'
+    label 'large'
     container 'cfrasier/epi-fiberseq:latest'
 
     input:
@@ -220,7 +219,7 @@ process create_pileups {
     script:
     """
     ft pileup \
-        --m6a --ml ${params.confidence_ml_val} \
+        --m6a \
         --cpg \
         -t ${task.cpus} \
         --ftx "len(msp)>${params.minimum_msp_dist}" \
@@ -230,9 +229,36 @@ process create_pileups {
     """
 }
 
+process create_5mC_pileup_cpg_tools {
+    label 'large'
+    container 'quay.io/pacbio/pb-cpg-tools@sha256:afd5468a423fe089f1437d525fdc19c704296f723958739a6fe226caa01fba1c'
+
+    input:
+    tuple val(samp_name), path(aligned_bam), val(ref_name), path(bam_index), path(ref_fasta), path(ref_fai)
+
+    output:
+    tuple val(samp_name), path("*.tsv.gz"), val(ref_name), emit: pileups
+
+    script:
+    """
+    aligned_bam_to_cpg_scores \
+      --threads ${task.cpus} \
+      --bam ${aligned_bam} \
+      --ref ${ref_fasta} \
+      --output-prefix ${samp_name}.${ref_name} \
+      --min-mapq 1 \
+      --min-coverage 4 \
+      --pileup-mode count
+
+    gunzip -c ${samp_name}.${ref_name}.combined.bed.gz \
+    | awk -v OFS=\$'\t' '!/^#/ {print \$1, \$2, \$3, \$4/100}' \
+    | gzip -c > ${samp_name}.cpgpileup.tsv.gz
+    """
+}
+
 process pileupbedgraphtobigwig {
-    publishDir "${params.outdir}/pileups/${samp_name}", mode: 'copy'
-    label 'medium'
+    publishDir "${params.outdir}/4_pileups/${samp_name}", mode: 'copy'
+    label 'large'
     container 'quay.io/pacbio/bigtools:3844b58_build1'
 
     input:
@@ -355,21 +381,30 @@ workflow {
     fiberseq_qc_workflow(call_msps.out.msp_bams)
     // -> samp_name, qc_files, ref_name
 
+    if (params.peak_call) {
+        call_fire_peaks(call_msps.out.msp_bams, references_ch)
+    }
+
     if (params.create_bigwigs) {
         // If --create_bigwigs is set in command line, create pileups and bigwigs
         create_pileups(call_msps.out.msp_bams)
         // -> samp_name, pileups, ref_name
         // create a bedgraph of 6ma calling and calculate percent 6ma coverage for each base
+        create_5mC_pileup_cpg_tools(call_msps.out.msp_bams.combine(references_ch, by: 2).map { row -> tuple(row[1], row[2], row[0], row[3], row[4], row[5]) })
         create_pileups.out.pileups
             .combine(references_ch, by: 2)
             .map { row -> tuple(row[1], row[2], row[0], row[4]) }
             .set { pileup_withref_ch }
         // -> samp_name, pileups, ref_name, ref_fai
         // convert the pileup bedgraph into a bigwig for downstream purposes
+        create_5mC_pileup_cpg_tools.out.pileups
+            .combine(references_ch, by: 2)
+            .map { row -> tuple(row[1], row[2], row[0], row[4], "perccpg", 4) }
+            .set { cpg_tools_pileup_bedgraph_ch }
         pileup_withref_ch
             .map { row -> tuple(row[0], row[1], row[2], row[3], "perc6ma", 4) }
-            .concat(pileup_withref_ch.map { row -> tuple(row[0], row[1], row[2], row[3], "perccpg", 5) })
             .concat(pileup_withref_ch.map { row -> tuple(row[0], row[1], row[2], row[3], "percnuc", 6) })
+            .concat(cpg_tools_pileup_bedgraph_ch)
             .set { pileup_bedgraph_ch }
         pileupbedgraphtobigwig(pileup_bedgraph_ch)
     }
