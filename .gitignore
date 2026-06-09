@@ -1,0 +1,14 @@
+nextflow
+
+inputs
+references
+
+singularity_cache
+
+work
+results
+*.html
+trace*.txt
+
+.nextflow
+.nextflow*
