@@ -34,6 +34,28 @@ process get_chrom_sizes {
     """
 }
 
+process fiber_locations_chromosomes {
+    label 'medium'
+    container 'cfrasier/epi-fiberseq:latest'
+    input:
+    tuple val(sampname), path(bam), val(ref_name), path(bam_index), val(chrom)
+    output:
+    tuple val(sampname), path("*${chrom}.fiber-locations.bed.gz"), val(ref_name), path("*${chrom}.fiber-locations.bed.gz.tbi"), val(chrom)
+    // /coverage/{v}-{chrom}.fiber-locations.bed.gz"
+
+    script:
+    """
+    # get fiber locations
+    (samtools view -@ $task.cpus -u ${bam} ${chrom} \
+        | conda run -n fiberseq-qc ft fire extract -t $task.cpus -s --all - \
+        | hck -F '#ct' -F st -F en -F fiber -F strand -F HP ) \
+        | (grep -v "^#" || true) \
+        | bgzip -@ $task.cpus \
+    > ${sampname}-${chrom}.fiber-locations.bed.gz;
+    tabix -p bed ${sampname}-${chrom}.fiber-locations.bed.gz
+    """
+}
+
 process fire_locations{
     publishDir "$params.outdir/6_FIRE_peaks/${sampname}", mode: 'copy'
     label 'large'
@@ -264,7 +286,7 @@ process get_only_FIREs {
     input:
     tuple val(sampname), path(fdr_bed), val(ref_name), path(fdr_bed_tbi), val(chrom)
     output:
-    tuple val(sampname), path("*.FIREs.${chrom}.bed.gz"), val(ref_name), path("*.FIREs.${chrom}.bed.gz.tbi"), val(chrom)
+    tuple val(sampname), path("*.FIREs.bed.gz"), val(ref_name), path("*.FIREs.bed.gz.tbi"), val(chrom)
     script:
     """
     HEADER=\$(bgzip -cd ${fdr_bed} | head -n 1 || true)
@@ -296,9 +318,9 @@ process get_only_FIREs {
         | csvtk round -tT -C '\$' -n 0 -f 2,3 \
         | bedtools sort -header -i - \
         | bgzip -@ ${task.cpus} \
-        > ${sampname}.FIREs.${chrom}.bed.gz
+        > ${sampname}.FIREs.bed.gz
 
-    tabix -p bed ${sampname}.FIREs.${chrom}.bed.gz
+    tabix -p bed ${sampname}.FIREs.bed.gz
     """
 }
 
@@ -331,50 +353,6 @@ workflow call_fire_peaks {
     references_ch
     main:
 
-    fire_locations(fire_input_ch)
-    extract_unfiltered_fire_locs(fire_locations.out)
-    fire_locations.out.combine(references_ch, by: 2)
-        .map { row -> tuple(row[1], row[2], row[0], row[3], row[4])}
-        .set {mosdepth_input_ch}
-    mosdepth(mosdepth_input_ch)
-    get_fire_cov_stats(mosdepth.out)
-    get_fire_locs(fire_locations.out)
-    mosdepth.out.combine(get_fire_locs.out, by: 0)
-        .combine(get_fire_cov_stats.out, by:0)
-        .map { row -> tuple(row[0], row[1], row[2], row[3], row[4], row[6], row[7], row[9], row[10])}
-        .set {coverage_filter_input_ch}
-    // 0sampname, 1overage_bed, 2ref_name, 3coverage_bed_tbi, 4shuffle_locations_bed, 6shuffle_locations_bed, 7med_cov, 9min_cov, 10max_cov
-
-    coverage_filter_locs(coverage_filter_input_ch)
-    coverage_filter_locs.out.combine(references_ch, by: 2)
-        .map { row -> tuple(row[1], row[2], row[0], row[3], row[4], row[5])}
-        .set {get_shuffled_locs_input_ch}
-    // 0sampname, 1coverage_bed, 2ref_name, 3coverage_bed_tbi, 4fasta, 5fasta_index
-
-    get_shuffled_locs(get_shuffled_locs_input_ch)
-    
-    fire_locations.out.combine(get_shuffled_locs.out, by: 0)
-        .map { row -> tuple(row[0], row[1], row[2], row[3], row[4])}
-        .set {get_fire_pileups_shuffled_input_ch}
-    // get_fire_pileups_shuffled_input_ch.view()
-    // 0sampname, 1fire_bam, 2ref_name, 3fire_bai, 4shuffled_locs_bed
-
-    get_fire_pileups_shuffled(get_fire_pileups_shuffled_input_ch)
-    
-    get_fire_pileups_shuffled.out.combine(get_fire_cov_stats.out, by: 0)
-        .map { row -> tuple(row[0], row[1], row[2], row[3], row[4], row[6], row[7])}
-        .set {create_fdr_table_input_ch}
-    // create_fdr_table_input_ch.view()
-    // 0sampname, 1fire_pileup, 2ref_name, 3fire_pileup_tbi, 4median_cov, 5min_cov, 6max_cov
-
-    create_fdr_table(create_fdr_table_input_ch)
-    get_fire_pileups_no_shuffle(fire_locations.out)
-
-    create_fdr_table.out.combine(get_fire_pileups_no_shuffle.out, by: 0)
-        .map { row -> tuple(row[0], row[1], row[2], row[3], row[5])}
-        .set {make_fdr_bed_input_ch}
-    // 0sampname, 1fdr_table, 2ref_name, 3shuffle_pileup_bed, 4bed_tbi
-
     get_chrom_sizes(references_ch)
     get_chrom_sizes.out
         .map { row -> tuple(row[0], row[1].splitCsv(sep: '\t').collect{sublist -> sublist[0]}, row[2])}
@@ -383,20 +361,70 @@ workflow call_fire_peaks {
         .filter { ref_fai, chr, ref_name -> !(chr =~ "random")}
         .filter { ref_fai, chr, ref_name -> !(chr =~ "chr[MXY]")}
         .filter { ref_fai, chr, ref_name -> !(chr =~ "chrEBV")}
-        .combine(make_fdr_bed_input_ch, by:2)
-        .map { row -> tuple(row[3], row[4], row[0], row[5], row[6], row[2])}
+        .combine(fire_input_ch, by:2)
+        .map { row -> tuple(row[3], row[4], row[0], row[5], row[2])}
         .set {chrom_sizes_ch}
-    // 0sampname, 1fdr_table, 2ref_name, 3shuffle_pileup_bed, 4bed_tbi, 5chromosome
+    // 0sampname, 1bam, 2ref_name, 3bam_index, 4chrom
 
-    split_pileup_by_chr(chrom_sizes_ch)
+    fiber_locations_chromosomes(chrom_sizes_ch)
+    fiber_locations_chromosomes.out.view()
 
-    make_fdr_bed(split_pileup_by_chr.out)
-    get_only_FIREs(make_fdr_bed.out)
-    get_only_FIREs.out.view()
-    get_only_FIREs.out.combine(get_fire_cov_stats.out, by: 0)
-        .map { row -> tuple(row[0], row[1], row[2], row[3], row[5], row[6])}
-        .set {merge_peaks_input_ch}
-    merge_peaks_input_ch.view()
+    // fire_locations(fire_input_ch)
+    // extract_unfiltered_fire_locs(fire_locations.out)
+    // fire_locations.out.combine(references_ch, by: 2)
+    //     .map { row -> tuple(row[1], row[2], row[0], row[3], row[4])}
+    //     .set {mosdepth_input_ch}
+    // mosdepth(mosdepth_input_ch)
+    // get_fire_cov_stats(mosdepth.out)
+    // get_fire_locs(fire_locations.out)
+    // mosdepth.out.combine(get_fire_locs.out, by: 0)
+    //     .combine(get_fire_cov_stats.out, by:0)
+    //     .map { row -> tuple(row[0], row[1], row[2], row[3], row[4], row[6], row[7], row[9], row[10])}
+    //     .set {coverage_filter_input_ch}
+    // // 0sampname, 1overage_bed, 2ref_name, 3coverage_bed_tbi, 4shuffle_locations_bed, 6shuffle_locations_bed, 7med_cov, 9min_cov, 10max_cov
+
+    // coverage_filter_locs(coverage_filter_input_ch)
+    // coverage_filter_locs.out.combine(references_ch, by: 2)
+    //     .map { row -> tuple(row[1], row[2], row[0], row[3], row[4], row[5])}
+    //     .set {get_shuffled_locs_input_ch}
+    // // 0sampname, 1coverage_bed, 2ref_name, 3coverage_bed_tbi, 4fasta, 5fasta_index
+
+    // get_shuffled_locs(get_shuffled_locs_input_ch)
+    
+    // fire_locations.out.combine(get_shuffled_locs.out, by: 0)
+    //     .map { row -> tuple(row[0], row[1], row[2], row[3], row[4])}
+    //     .set {get_fire_pileups_shuffled_input_ch}
+    // // get_fire_pileups_shuffled_input_ch.view()
+    // // 0sampname, 1fire_bam, 2ref_name, 3fire_bai, 4shuffled_locs_bed
+
+    // get_fire_pileups_shuffled(get_fire_pileups_shuffled_input_ch)
+    
+    // get_fire_pileups_shuffled.out.combine(get_fire_cov_stats.out, by: 0)
+    //     .map { row -> tuple(row[0], row[1], row[2], row[3], row[4], row[6], row[7])}
+    //     .set {create_fdr_table_input_ch}
+    // // create_fdr_table_input_ch.view()
+    // // 0sampname, 1fire_pileup, 2ref_name, 3fire_pileup_tbi, 4median_cov, 5min_cov, 6max_cov
+
+    // create_fdr_table(create_fdr_table_input_ch)
+    // get_fire_pileups_no_shuffle(fire_locations.out)
+
+    // create_fdr_table.out.combine(get_fire_pileups_no_shuffle.out, by: 0)
+    //     .map { row -> tuple(row[0], row[1], row[2], row[3], row[5])}
+    //     .set {make_fdr_bed_input_ch}
+    // // 0sampname, 1fdr_table, 2ref_name, 3shuffle_pileup_bed, 4bed_tbi
+
+
+    // // 0sampname, 1fdr_table, 2ref_name, 3shuffle_pileup_bed, 4bed_tbi, 5chromosome
+
+    // split_pileup_by_chr(chrom_sizes_ch)
+
+    // make_fdr_bed(split_pileup_by_chr.out)
+    // get_only_FIREs(make_fdr_bed.out)
+    // get_only_FIREs.out.view()
+    // get_only_FIREs.out.combine(get_fire_cov_stats.out, by: 0)
+    //     .map { row -> tuple(row[0], row[1], row[2], row[3], row[5], row[6])}
+    //     .set {merge_peaks_input_ch}
+    // merge_peaks_input_ch.view()
     // 0sampname, 1FIRE_bed, 2ref_name, 3med_cov, 4min_cov, 5max_cov
 
     // merge_peaks(merge_peaks_input_ch)
