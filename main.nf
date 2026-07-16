@@ -21,6 +21,7 @@ params.outdir = "${workflow.launchDir}/results"
 // Grab subworkflows
 include { fiberseq_qc_workflow } from './subworkflows/fiberseq-qc.nf'
 include { call_fire_peaks } from './subworkflows/FIRE_peakcalling.nf'
+include { create_bigwigs } from './subworkflows/create_bigwigs.nf'
 
 process align_bams {
     label 'large'
@@ -206,84 +207,6 @@ process call_msps {
     """
 }
 
-process create_pileups {
-    label 'large'
-    container 'cfrasier/epi-fiberseq:latest'
-
-    input:
-    tuple val(samp_name), path(aligned_bam), val(ref_name), path(bam_index)
-
-    output:
-    tuple val(samp_name), path("*.tsv.gz"), val(ref_name), emit: pileups
-
-    script:
-    """
-    ft pileup \
-        --m6a \
-        --cpg \
-        -t ${task.cpus} \
-        --ftx "len(msp)>${params.minimum_msp_dist}" \
-        ${aligned_bam} \
-    | awk -v OFS="\t" -v FS="\t" '{print \$1,\$2,\$3,\$9/(\$4+0.1),\$10/(\$4+0.1),\$7/(\$4+0.1)}' \
-    | gzip -c > ${samp_name}.pileup_all.tsv.gz
-    """
-}
-
-process create_5mC_pileup_cpg_tools {
-    label 'large'
-    container 'quay.io/pacbio/pb-cpg-tools@sha256:afd5468a423fe089f1437d525fdc19c704296f723958739a6fe226caa01fba1c'
-
-    input:
-    tuple val(samp_name), path(aligned_bam), val(ref_name), path(bam_index), path(ref_fasta), path(ref_fai)
-
-    output:
-    tuple val(samp_name), path("*.tsv.gz"), val(ref_name), emit: pileups
-
-    script:
-    """
-    aligned_bam_to_cpg_scores \
-      --threads ${task.cpus} \
-      --bam ${aligned_bam} \
-      --ref ${ref_fasta} \
-      --output-prefix ${samp_name}.${ref_name} \
-      --min-mapq 1 \
-      --min-coverage 4 \
-      --pileup-mode count
-
-    gunzip -c ${samp_name}.${ref_name}.combined.bed.gz \
-    | awk -v OFS=\$'\t' '!/^#/ {print \$1, \$2, \$3, \$4/100}' \
-    | gzip -c > ${samp_name}.cpgpileup.tsv.gz
-    """
-}
-
-process pileupbedgraphtobigwig {
-    publishDir "${params.outdir}/4_pileups/${samp_name}", mode: 'copy'
-    label 'large'
-    container 'quay.io/pacbio/bigtools:3844b58_build1'
-
-    input:
-    tuple val(samp_name), path(bedgraph), val(ref_name), path(ref_fai), val(feature), val(col_num)
-
-    output:
-    tuple val(samp_name), path("*.bw")
-
-    script:
-    """
-    cut -f 1,2 ${ref_fai} > chromsizes
-    zcat ${bedgraph} \
-    | cut -f 1,2,3,${col_num} \
-    | grep -v '^#' \
-    | sort -k1,1 -k2,2n \
-    > temp.bedgraph
-    
-    bedgraphtobigwig \
-        --nthreads ${task.cpus} \
-        temp.bedgraph \
-        chromsizes \
-        ${samp_name}.${feature}.bw
-    """
-}
-
 /////////////////////////////////////////////////////////////
 
 workflow {
@@ -386,26 +309,6 @@ workflow {
     }
 
     if (params.create_bigwigs) {
-        // If --create_bigwigs is set in command line, create pileups and bigwigs
-        create_pileups(call_msps.out.msp_bams)
-        // -> samp_name, pileups, ref_name
-        // create a bedgraph of 6ma calling and calculate percent 6ma coverage for each base
-        create_5mC_pileup_cpg_tools(call_msps.out.msp_bams.combine(references_ch, by: 2).map { row -> tuple(row[1], row[2], row[0], row[3], row[4], row[5]) })
-        create_pileups.out.pileups
-            .combine(references_ch, by: 2)
-            .map { row -> tuple(row[1], row[2], row[0], row[4]) }
-            .set { pileup_withref_ch }
-        // -> samp_name, pileups, ref_name, ref_fai
-        // convert the pileup bedgraph into a bigwig for downstream purposes
-        create_5mC_pileup_cpg_tools.out.pileups
-            .combine(references_ch, by: 2)
-            .map { row -> tuple(row[1], row[2], row[0], row[4], "perccpg", 4) }
-            .set { cpg_tools_pileup_bedgraph_ch }
-        pileup_withref_ch
-            .map { row -> tuple(row[0], row[1], row[2], row[3], "perc6ma", 4) }
-            .concat(pileup_withref_ch.map { row -> tuple(row[0], row[1], row[2], row[3], "percnuc", 6) })
-            .concat(cpg_tools_pileup_bedgraph_ch)
-            .set { pileup_bedgraph_ch }
-        pileupbedgraphtobigwig(pileup_bedgraph_ch)
+        create_bigwigs(call_msps.out.msp_bams, references_ch)
     }
 }
