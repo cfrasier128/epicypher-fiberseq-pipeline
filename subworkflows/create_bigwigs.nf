@@ -42,8 +42,8 @@ process create_5mC_pileup_methbat {
       --output-prefix ${samp_name}.${ref_name} \
       --min-mapq 1 \
       --min-coverage 4 \
-      --skip-6mA
-      --skip-5hmC
+      --skip-6mA \
+      --skip-5hmC \
       --pileup-mode count
 
     gunzip -c ${samp_name}.${ref_name}.5mC.bed.gz \
