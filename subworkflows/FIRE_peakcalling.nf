@@ -3,8 +3,7 @@ nextflow.enable.dsl = 2
 
 process split_pileup_by_chr{
     publishDir "$params.outdir/6_FIRE_peaks/${sampname}", mode: 'copy'
-    cpus 8
-    memory '16 GB'
+    label 'large'
     container 'cfrasier/epi-fire'
 
     input:
@@ -59,21 +58,35 @@ process extract_unfiltered_fire_locs{
     input:
     tuple val(sampname), path(fire_bam), val(ref_name), path(fire_bai)
     output:
-    tuple val(sampname), path("*.bed.gz"), val(ref_name), path("*.tbi")
+    tuple val(sampname), path("*.bed"), val(ref_name)
     script:
     """
     ft fire -t $task.cpus --extract $fire_bam | LC_ALL=C sort --parallel=$task.cpus -k1,1 -k2,2n -k3,3n -k4,4 \
     | (grep -v '^#' || true) \
-    | bgzip -@ $task.cpus \
-    > ${sampname}.FIRE_locs.bed.gz;
-    tabix -p bed ${sampname}.FIRE_locs.bed.gz;
+    > ${sampname}.FIRE_locs.bed;
+    """
+}
+
+process split_locs_by_chrom{
+    publishDir "$params.outdir/6_FIRE_peaks/${sampname}", mode: 'copy'
+    label 'medium'
+    container 'cfrasier/epi-fire:0.20'
+
+    input:
+    tuple val(sampname), path(fire_locs_bed), val(ref_name), val(chrom)
+    output:
+    tuple val(sampname), path("*.${chrom}.FIRE_loc.bed.gz"), val(ref_name), path("*.${chrom}.FIRE_loc.bed.gz.tbi"), val(chrom)
+    script:
+    """
+    bedextract $chrom $fire_locs_bed | bgzip -@ $task.cpus > ${sampname}.${chrom}.FIRE_loc.bed.gz;
+    tabix -p bed ${sampname}.${chrom}.FIRE_loc.bed.gz
     """
 }
 
 process mosdepth{
     publishDir "$params.outdir/6_FIRE_peaks/${sampname}", mode: 'copy'
     label 'medium'
-    container 'cfrasier/epi-fire'
+    container 'cfrasier/epi-fire:0.20'
 
     input:
     tuple val(sampname), path(fire_bam), val(ref_name), path(fire_bai), path(ref_fasta)
@@ -92,7 +105,7 @@ process mosdepth{
 process get_fire_cov_stats{
     publishDir "$params.outdir/6_FIRE_peaks/${sampname}", mode: 'copy'
     label 'large'
-    container 'cfrasier/epi-fire'
+    container 'cfrasier/epi-fire:0.20'
 
     input:
     tuple val(sampname), path(cov_bed), val(ref_name), path(tbi)
@@ -107,12 +120,12 @@ process get_fire_cov_stats{
 process get_fire_locs{
     publishDir "$params.outdir/6_FIRE_peaks/${sampname}", mode: 'copy'
     label 'large'
-    container 'cfrasier/epi-fire'
+    container 'cfrasier/epi-fire:0.20'
 
     input:
     tuple val(sampname), path(fire_bam), val(ref_name), path(fire_bai)
     output:
-    tuple val(sampname), path("*shuffle-locations.bed.gz"), val(ref_name), path("*tbi")
+    tuple val(sampname), path("*.shuffle-locations.bed.gz"), val(ref_name), path("*.tbi")
     script:
     """
     ft extract $fire_bam -t $task.cpus -s --all - \
@@ -127,7 +140,7 @@ process get_fire_locs{
 process coverage_filter_locs{
     publishDir "$params.outdir/6_FIRE_peaks/${sampname}", mode: 'copy'
     label 'large'
-    container 'cfrasier/epi-fire'
+    container 'cfrasier/epi-fire:0.20'
 
     input:
     // 0sampname, 1overage_bed, 2ref_name, 3coverage_bed_tbi, 4shuffle_locations_bed, 6shuffle_locations_bed_tbi, 7med_cov, 9min_cov, 10max_cov
@@ -151,9 +164,8 @@ process coverage_filter_locs{
 
 process get_shuffled_locs{
     publishDir "$params.outdir/6_FIRE_peaks/${sampname}", mode: 'copy'
-    cpus 8
-    memory '16 GB'
-    container 'cfrasier/epi-fire'
+    label 'large'
+    container 'cfrasier/epi-fire:0.20'
 
     input:
     tuple val(sampname), path(final_cov_filtered_locs), val(ref_name), path(final_cov_filtered_locs_tbi), path(ref_fasta), path(ref_fai)
@@ -174,9 +186,8 @@ process get_shuffled_locs{
 
 process get_fire_pileups_shuffled{
     publishDir "$params.outdir/6_FIRE_peaks/${sampname}", mode: 'copy'
-    cpus 8
-    memory '16 GB'
-    container 'cfrasier/epi-fire'
+    label 'large'
+    container 'cfrasier/epi-fire:0.20'
 
     input:
     tuple val(sampname), path(fire_bam), val(ref_name), path(fire_bai),  path(shuffled_locs_bed)
@@ -195,9 +206,8 @@ process get_fire_pileups_shuffled{
 
 process create_fdr_table{
     publishDir "$params.outdir/6_FIRE_peaks/${sampname}", mode: 'copy'
-    cpus 8
-    memory '16 GB'
-    container 'cfrasier/epi-fire'
+    label 'large'
+    container 'cfrasier/epi-fire:0.20'
 
     input:
     tuple val(sampname), path(fire_pileup), val(ref_name), path(fire_pileup_tbi), path(median_cov), path(min_cov), path(max_cov)
@@ -215,9 +225,8 @@ process create_fdr_table{
 
 process get_fire_pileups_no_shuffle{
     publishDir "$params.outdir/6_FIRE_peaks/${sampname}", mode: 'copy'
-    cpus 8
-    memory '16 GB'
-    container 'cfrasier/epi-fire'
+    label 'large'
+    container 'cfrasier/epi-fire:0.20'
 
     input:
     tuple val(sampname), path(fire_bam), val(ref_name), path(fire_bai)
@@ -236,9 +245,8 @@ process get_fire_pileups_no_shuffle{
 
 process make_fdr_bed {
     publishDir "$params.outdir/6_FIRE_peaks/${sampname}", mode: 'copy'
-    cpus 16
-    memory '108 GB'
-    container 'cfrasier/epi-fire'
+    label 'large'
+    container 'cfrasier/epi-fire:0.20'
 
     input:
     tuple val(sampname), path(fdr_table), val(ref_name), path(no_shuffle_pileup), path(pileup_tbi), val(chrom)
@@ -247,7 +255,7 @@ process make_fdr_bed {
 
     script:
     """
-    conda run -n FIRE python3 /opt/FIRE/scripts/fdr-table.v2.py -v 1 \
+    conda run -n FIRE python3 /opt/FIRE/scripts/fdr-table.py -v 1 \
     --fdr-table $fdr_table \
     $no_shuffle_pileup ${sampname}.FIRE_dev.FDR.${chrom}.bed;
     bgzip -@ 8 ${sampname}.FIRE_dev.FDR.${chrom}.bed;
@@ -257,12 +265,11 @@ process make_fdr_bed {
 
 process get_only_FIREs {
     publishDir "$params.outdir/6_FIRE_peaks/${sampname}", mode: 'copy'
-    cpus 4
-    memory '8 GB'
-   container 'cfrasier/epi-fire'
+    label 'medium'
+   container 'cfrasier/epi-fire:0.20'
 
     input:
-    tuple val(sampname), path(fdr_bed), val(ref_name), path(fdr_bed_tbi), val(chrom)
+    tuple val(sampname), path(fdr_bed), val(ref_name), path(fdr_bed_tbi), val(chrom), path(fire_loc_bed), path(fire_loc_bed_tbi)
     output:
     tuple val(sampname), path("*.FIREs.${chrom}.bed.gz"), val(ref_name), path("*.FIREs.${chrom}.bed.gz.tbi"), val(chrom)
     script:
@@ -277,7 +284,7 @@ process get_only_FIREs {
 
     OUT_HEADER=\$(printf "\$HEADER\\tpeak_chrom\\tpeak_start\\tpeak_end\\tFIRE_IDs\\tFIRE_size_mean\\tFIRE_size_ssd\\tFIRE_start_ssd\\tFIRE_end_ssd")
 
-    zcat ${fdr_bed} | cut -f 1-3 | awk -v OFMT="%f" '{print \$0"\t"\$3-\$2"\t"NR}' > sam.input.tsv
+    zcat ${fire_loc_bed} | cut -f 1-3 | awk -v OFMT="%f" '{print \$0"\t"\$3-\$2"\t"NR}' > sam.input.tsv
 
     ( \\
         printf "\$OUT_HEADER\\n"; \\
@@ -302,26 +309,50 @@ process get_only_FIREs {
     """
 }
 
+
+process merge_chromosome_beds {
+    publishDir "$params.outdir/6_FIRE_peaks/${sampname}", mode: 'copy'
+    label 'small'
+    container 'cfrasier/epi-fire:0.20'
+
+    input:
+    tuple val(sampname), path(chrom_beds), val(ref_name), path(chrom_beds_tbis)
+
+    output:
+    tuple val(sampname), path("${sampname}.FIREs.${ref_name}.bed.gz"), val(ref_name), path("${sampname}.FIREs.${ref_name}.bed.gz.tbi")
+
+    script:
+    """
+    set -euo pipefail
+    header=\$(zcat ${chrom_beds[0]} | head -n 1 || true)
+    echo "\$header" > ${sampname}.FIREs.${ref_name}.bed
+    for file in ${chrom_beds}; do
+        zcat \$file | tail -n +2
+    done >> ${sampname}.FIREs.${ref_name}.bed
+    bgzip -@ ${task.cpus} ${sampname}.FIREs.${ref_name}.bed
+    tabix -p bed ${sampname}.FIREs.${ref_name}.bed.gz
+    """
+}
+
 process merge_peaks {
     publishDir "$params.outdir/6_FIRE_peaks/${sampname}", mode: 'copy'
-    cpus 4
-    memory '8 GB'
-    container 'cfrasier/epi-fire'
+    label 'medium'
+    container 'cfrasier/epi-fire:0.21'
 
     input:
     tuple val(sampname), path(FIRE_bed), val(ref_name), path(med_cov), path(min_cov), path(max_cov)
     output:
-    tuple val(sampname), path("*.FIRE_merged.bed.gz"), val(ref_name)
+    tuple val(sampname), path("*.FIRE_broad.bed.gz"), val(ref_name), path("*.FIRE_broad.bed.gz.tbi")
     script:
     """
-    bgzip -cd ${FIRE_bed} \
-            | conda run -n FIRE python /opt/FIRE/scripts/merge_fire_peaks.py -v 1 \
+    conda run -n FIRE python /opt/FIRE/scripts/merge_fire_peaks.py -v 1 \
+                -i $FIRE_bed \
                 --max-cov \$(cat ${max_cov}) \
                 --min-cov \$(cat ${min_cov}) \
                 --min-frac-accessible 0.0 \
-            | bgzip -@ 8 \
-        > ${sampname}.FIRE_dev.FIRE_merged.bed.gz;
-    tabix -p bed ${sampname}.FIRE_dev.FIRE_merged.bed.gz
+                --output-file ${sampname}.FIRE_dev.FIRE_broad.bed ;
+    bgzip -@ ${task.cpus} ${sampname}.FIRE_dev.FIRE_broad.bed;
+    tabix -p bed ${sampname}.FIRE_dev.FIRE_broad.bed.gz
     """
 }
 
@@ -332,10 +363,31 @@ workflow call_fire_peaks {
     main:
 
     fire_locations(fire_input_ch)
-    extract_unfiltered_fire_locs(fire_locations.out)
     fire_locations.out.combine(references_ch, by: 2)
         .map { row -> tuple(row[1], row[2], row[0], row[3], row[4])}
         .set {mosdepth_input_ch}
+
+    get_chrom_sizes(references_ch)
+    get_chrom_sizes.out
+        .map { row -> tuple(row[0], row[1].splitCsv(sep: '\t').collect{sublist -> sublist[0]}, row[2])}
+        .transpose() // 0ref_fai, 1chr_name, 2ref_name
+        .filter { ref_fai, chr, ref_name -> !(chr =~ "chrUn")}
+        .filter { ref_fai, chr, ref_name -> !(chr =~ "random")}
+        .filter { ref_fai, chr, ref_name -> !(chr =~ "chr[MXY]")}
+        .filter { ref_fai, chr, ref_name -> !(chr =~ "chrEBV")}
+        .set {chrom_sizes_ch}
+
+    // 0 ref_name, 1 sampname, 2 fire_bam, 3 fire_bai, 4 ref_fai, 5 chrom_name
+    // val(sampname), path(fire_bam), val(ref_name), path(fire_bai), val(chrom)
+
+    extract_unfiltered_fire_locs(fire_locations.out)
+    extract_unfiltered_fire_locs.out.combine(chrom_sizes_ch, by: 2)
+        .map { row -> tuple(row[1], row[2], row[0], row[4])}
+        // 0ref_name, 1sampname, 2fire_loc_bed, 3ref_fai, 4chrom
+        // tuple val(sampname), path(fire_locs_bed), val(ref_name), val(chrom)
+        .set {split_locs_by_chroms_input_ch}
+
+    split_locs_by_chrom(split_locs_by_chroms_input_ch)
     mosdepth(mosdepth_input_ch)
     get_fire_cov_stats(mosdepth.out)
     get_fire_locs(fire_locations.out)
@@ -375,7 +427,6 @@ workflow call_fire_peaks {
         .set {make_fdr_bed_input_ch}
     // 0sampname, 1fdr_table, 2ref_name, 3shuffle_pileup_bed, 4bed_tbi
 
-    get_chrom_sizes(references_ch)
     get_chrom_sizes.out
         .map { row -> tuple(row[0], row[1].splitCsv(sep: '\t').collect{sublist -> sublist[0]}, row[2])}
         .transpose() // 0ref_fai, 1chr_name, 2ref_name
@@ -385,19 +436,34 @@ workflow call_fire_peaks {
         .filter { ref_fai, chr, ref_name -> !(chr =~ "chrEBV")}
         .combine(make_fdr_bed_input_ch, by:2)
         .map { row -> tuple(row[3], row[4], row[0], row[5], row[6], row[2])}
-        .set {chrom_sizes_ch}
+        .set {split_pileup_by_chr_input_ch}
     // 0sampname, 1fdr_table, 2ref_name, 3shuffle_pileup_bed, 4bed_tbi, 5chromosome
 
-    split_pileup_by_chr(chrom_sizes_ch)
+    split_pileup_by_chr(split_pileup_by_chr_input_ch)
 
     make_fdr_bed(split_pileup_by_chr.out)
-    get_only_FIREs(make_fdr_bed.out)
-    get_only_FIREs.out.view()
-    get_only_FIREs.out.combine(get_fire_cov_stats.out, by: 0)
-        .map { row -> tuple(row[0], row[1], row[2], row[3], row[5], row[6])}
-        .set {merge_peaks_input_ch}
-    merge_peaks_input_ch.view()
-    // 0sampname, 1FIRE_bed, 2ref_name, 3med_cov, 4min_cov, 5max_cov
+    make_fdr_bed.out.combine(split_locs_by_chrom.out, by: [0, 4])
+    // 0samopname, 1chrom, 2fdr_bed, 3ref_name, 4fdr_bed_tbi, 5fire_loc_bed, 6ref_name, 7fire_loc_bed_tbi
+        .map { row -> tuple(row[0], row[2], row[3], row[4], row[1], row[5], row[7])}
+        .set {get_only_FIREs_input_ch}
+    // val(sampname), path(fdr_bed), val(ref_name), path(fdr_bed_tbi), val(chrom), path(fire_loc_bed), path(fire_loc_bed_tbi)
+    
 
-    // merge_peaks(merge_peaks_input_ch)
+    get_only_FIREs(get_only_FIREs_input_ch)
+    get_only_FIREs.out
+        .collect(flat:false)
+        .flatMap()
+        .groupTuple(by: 0)
+        .map { row -> tuple(row[0], row[1], row[2].first(), row[3])
+        //     tuple(sampname, fire_beds, ref_names, fire_tbis, chroms)
+        }
+        .set{merge_chrom_beds_input_ch}
+
+    merge_chromosome_beds(merge_chrom_beds_input_ch)
+     merge_chromosome_beds.out.combine(get_fire_cov_stats.out, by: 0)
+        .map { row -> tuple(row[0], row[1], row[2], row[4], row[6], row[7])}
+        .set {merge_peaks_input_ch}
+//     // 0sampname, 1FIRE_bed, 2ref_name, 3med_cov, 4min_cov, 5max_cov
+
+    merge_peaks(merge_peaks_input_ch)
 }

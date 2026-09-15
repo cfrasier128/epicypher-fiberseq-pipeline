@@ -36,16 +36,15 @@ process create_5mC_pileup_methbat {
 
     script:
     """
-    aligned_bam_to_cpg_scores \
+    methbat pileup \
       --threads ${task.cpus} \
-      --bam ${aligned_bam} \
+      --input-bam ${aligned_bam} \
       --output-prefix ${samp_name}.${ref_name} \
       --min-mapq 1 \
       --min-coverage 4 \
-      --skip-6mA
+      --skip-6mA \
       --skip-5hmC
-      --pileup-mode count
-
+      
     gunzip -c ${samp_name}.${ref_name}.5mC.bed.gz \
     | awk -v OFS=\$'\t' '!/^#/ {print \$1, \$2, \$3, \$7/100}' \
     | gzip -c > ${samp_name}.cpgpileup.tsv.gz

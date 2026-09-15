@@ -6,7 +6,7 @@ params.sample_sheet = ''
 params.ref_sheet_path = ''
 
 // default parameters
-params.minimum_msp_dist = '10'
+params.minimum_msp_dist = '4'
 
 // optional steps
 params.pb_qc = false
@@ -202,6 +202,7 @@ process call_msps {
     conda run -n fiberseq-qc ft add-nucleosomes \
         --threads ${task.cpus} \
         -v \
+        -x "len(msp)>${params.minimum_msp_dist}" \
         ${aligned_bam} ${samp_name}.${ref_name}.6ma.nucs.bam;
     samtools index -@ ${task.cpus - 1} ${samp_name}.${ref_name}.6ma.nucs.bam;
     """
