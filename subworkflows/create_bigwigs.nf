@@ -43,14 +43,9 @@ process create_5mC_pileup_methbat {
       --min-mapq 1 \
       --min-coverage 4 \
       --skip-6mA \
-<<<<<<< HEAD
-      --skip-5hmC
-      
-=======
       --skip-5hmC \
       --pileup-mode count
 
->>>>>>> c4f8a4206034fc052712a6f6f94f0ee74296c4a5
     gunzip -c ${samp_name}.${ref_name}.5mC.bed.gz \
     | awk -v OFS=\$'\t' '!/^#/ {print \$1, \$2, \$3, \$7/100}' \
     | gzip -c > ${samp_name}.cpgpileup.tsv.gz
