@@ -19,7 +19,7 @@ While this repository is maintained by EpiCypher, Inc., we make no promises to t
 
 <h3>Requirements</h3>
 
-- Nextflow (the `Makefile` can download a pinned version). It is also possible to install via Conda.
+- Nextflow (the `Makefile` can download a pinned version). It is also possible to install via [Conda]([https://example.com](https://docs.seqera.io/nextflow/install).
 - Containers:
   - `-profile local` uses Docker.
   - `-profile slurm` uses Singularity/Apptainer. (Can also be used to support Docker)
